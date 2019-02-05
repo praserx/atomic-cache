@@ -1,19 +1,20 @@
 package atomiccache
 
 import (
-	"time"
+	"sync/atomic"
 )
 
-// Record structure represents one record stored in cache memory. During
-// initialization is allocated maximum size of record. It prevents garbage
-// collector to take action.
+// Record structure represents one record stored in cache memory.
 type Record struct {
 	size  uint32
 	alloc uint32
 	data  []byte
 }
 
-// NewRecord initialize one new record and return pointer to them.
+// NewRecord initialize one new record and return pointer to them. During
+// initialization is allocated maximum size of record. So we have record which
+// is smaller than maximum size, then we set `alloc` property. It specifies how
+// many bytes are used. It prevents garbage collector to take action.
 func NewRecord(size uint32) *Record {
 	return &Record{
 		size:  size,
@@ -22,30 +23,33 @@ func NewRecord(size uint32) *Record {
 	}
 }
 
+// Set store data to record memory. On output we have bytes, which are copied to
+// record data property and size is set.
 func (r *Record) Set(data []byte) {
 	dataLength := uint32(len(data))
 	if dataLength > r.size {
-		r.alloc = r.size
+		atomic.StoreUint32(&r.alloc, r.size)
 	} else {
-		r.alloc = dataLength
+		atomic.StoreUint32(&r.alloc, dataLength)
 	}
 	copy(r.data, data)
 }
 
+// Get returns bytes based on size of virtual allocation. It means that it
+// returns only specific count of bytes, based on alloc property.
 func (r *Record) Get() []byte {
-	return r.data[:r.alloc]
+	return r.data[:atomic.LoadUint32(&r.alloc)]
 }
 
-func (r *Record) Free(expiration time.Duration) {
-	go func() {
-		// plan free memory using time.Ticker
-		// then allocated = 0
-	}()
+// Free set alloc property to 0. Through this action, we empty memory of record
+// without calling garbage collector.
+func (r *Record) Free() {
+	atomic.StoreUint32(&r.alloc, 0)
 }
 
 // GetAllocated returns size of allocated bytes.
 func (r *Record) GetAllocated() uint32 {
-	return r.alloc
+	return atomic.LoadUint32(&r.alloc)
 }
 
 // GetDataLength returns real size of allocated bytes in memory.
