@@ -2,6 +2,7 @@ package atomiccache
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 )
 
@@ -35,107 +36,101 @@ func TestRecordFree(t *testing.T) {
 	}
 }
 
-func BenchmarkRecordNew512(b *testing.B) {
+func benchmarkRecordNew(size uint32, b *testing.B) {
+	b.ReportAllocs()
+
 	for n := 0; n < b.N; n++ {
-		NewRecord(512)
+		NewRecord(size)
 	}
+}
+
+func BenchmarkRecordNew512(b *testing.B) {
+	benchmarkRecordNew(512, b)
 }
 
 func BenchmarkRecordNew1024(b *testing.B) {
-	for n := 0; n < b.N; n++ {
-		NewRecord(1024)
-	}
+	benchmarkRecordNew(1024, b)
 }
 
 func BenchmarkRecordNew2048(b *testing.B) {
+	benchmarkRecordNew(2048, b)
+}
+
+func benchmarkRecordSet(size uint32, b *testing.B) {
+	b.ReportAllocs()
+
+	var data []byte
+	record := NewRecord(size)
+
+	for i := uint32(0); i < size; i++ {
+		data = append(data, 1)
+	}
+
 	for n := 0; n < b.N; n++ {
-		NewRecord(1024)
+		record.Set(data)
 	}
 }
 
 func BenchmarkRecordSet512(b *testing.B) {
-	var data []byte
-	size := uint32(512)
-	record := NewRecord(size)
-
-	for i := uint32(0); i < size; i++ {
-		data = append(data, 1)
-	}
-
-	for n := 0; n < b.N; n++ {
-		record.Set(data)
-	}
+	benchmarkRecordSet(512, b)
 }
 
 func BenchmarkRecordSet1024(b *testing.B) {
-	var data []byte
-	size := uint32(1024)
-	record := NewRecord(size)
-
-	for i := uint32(0); i < size; i++ {
-		data = append(data, 1)
-	}
-
-	for n := 0; n < b.N; n++ {
-		record.Set(data)
-	}
+	benchmarkRecordSet(1024, b)
 }
 
 func BenchmarkRecordSet2048(b *testing.B) {
+	benchmarkRecordSet(2048, b)
+}
+
+func benchmarkRecordGet(size uint32, b *testing.B) {
+	b.ReportAllocs()
+
 	var data []byte
-	size := uint32(2048)
 	record := NewRecord(size)
+	record.Set(data)
 
 	for i := uint32(0); i < size; i++ {
 		data = append(data, 1)
 	}
 
 	for n := 0; n < b.N; n++ {
-		record.Set(data)
+		record.Get()
 	}
 }
 
 func BenchmarkRecordGet512(b *testing.B) {
-	var data []byte
-	size := uint32(512)
-	record := NewRecord(size)
-	record.Set(data)
-
-	for i := uint32(0); i < size; i++ {
-		data = append(data, 1)
-	}
-
-	for n := 0; n < b.N; n++ {
-		record.Get()
-	}
+	benchmarkRecordGet(512, b)
 }
 
 func BenchmarkRecordGet1024(b *testing.B) {
-	var data []byte
-	size := uint32(1024)
-	record := NewRecord(size)
-	record.Set(data)
-
-	for i := uint32(0); i < size; i++ {
-		data = append(data, 1)
-	}
-
-	for n := 0; n < b.N; n++ {
-		record.Get()
-	}
+	benchmarkRecordGet(1024, b)
 }
 
 func BenchmarkRecordGet2048(b *testing.B) {
-	var data []byte
-	size := uint32(2048)
-	record := NewRecord(size)
-	record.Set(data)
+	benchmarkRecordGet(2048, b)
+}
 
-	for i := uint32(0); i < size; i++ {
+func BenchmarkRecordGet2048Concurrent(b *testing.B) {
+	b.ReportAllocs()
+
+	var data []byte
+	var wg sync.WaitGroup
+
+	record := NewRecord(2048)
+
+	for i := uint32(0); i < 2048; i++ {
 		data = append(data, 1)
 	}
 
+	record.Set(data)
+
 	for n := 0; n < b.N; n++ {
-		record.Get()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			record.Get()
+		}()
 	}
+	wg.Wait()
 }
