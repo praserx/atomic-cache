@@ -26,17 +26,28 @@ func TestShardSimple(t *testing.T) {
 	}
 }
 
-// func TestRecordFree(t *testing.T) {
-// 	size := uint32(10)
-// 	want := []byte{0, 1, 2}
+func TestShardFreeExpiration(t *testing.T) {
+	var data []byte
+	shard := NewShard(2048, 2048)
 
-// 	record := NewRecord(size)
-// 	record.Set(want)
-// 	record.Free()
-// 	if !reflect.DeepEqual(record.Get(), []byte{}) {
-// 		t.Errorf("[%d] %v != %v", 10, record.Get(), want)
-// 	}
-// }
+	for i := uint32(0); i < 2048; i++ {
+		data = append(data, 1)
+	}
+
+	index := shard.Set(data, 500*time.Millisecond)
+
+	time.Sleep(100 * time.Millisecond)
+
+	if len(shard.Get(index)) == 0 {
+		t.Errorf("Cache is empty, but expecting some data")
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	if len(shard.Get(index)) != 0 {
+		t.Errorf("Cache is not empty, but expecting nothing")
+	}
+}
 
 func benchmarkShardNew(slotCount, slotSize uint32, b *testing.B) {
 	b.ReportAllocs()
@@ -68,6 +79,8 @@ func benchmarkShardSet(slotCount, slotSize, dataSize uint32, b *testing.B) {
 		data = append(data, 1)
 	}
 
+	b.ResetTimer()
+
 	for n := 0; n < b.N; n++ {
 		index := shard.Set(data, 1*time.Minute)
 		shard.Free(index)
@@ -97,6 +110,8 @@ func benchmarkShardGet(slotCount, slotSize, dataSize uint32, b *testing.B) {
 	}
 
 	index := shard.Set(data, 1*time.Minute)
+
+	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
 		shard.Get(index)
@@ -130,6 +145,8 @@ func BenchmarkShardGet2048Concurrent(b *testing.B) {
 	}
 
 	index := shard.Set(data, 1*time.Minute)
+
+	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
 		wg.Add(1)

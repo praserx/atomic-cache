@@ -66,6 +66,8 @@ func benchmarkRecordSet(size uint32, b *testing.B) {
 		data = append(data, 1)
 	}
 
+	b.ResetTimer()
+
 	for n := 0; n < b.N; n++ {
 		record.Set(data)
 	}
@@ -93,6 +95,8 @@ func benchmarkRecordGet(size uint32, b *testing.B) {
 	for i := uint32(0); i < size; i++ {
 		data = append(data, 1)
 	}
+
+	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
 		record.Get()
@@ -124,6 +128,8 @@ func BenchmarkRecordGet2048Concurrent(b *testing.B) {
 	}
 
 	record.Set(data)
+
+	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
 		wg.Add(1)

@@ -6,10 +6,10 @@ import (
 
 // Record structure represents one record stored in cache memory.
 type Record struct {
+	sync.RWMutex
 	size  uint32
 	alloc uint32
 	data  []byte
-	mutex *sync.RWMutex
 }
 
 // NewRecord initialize one new record and return pointer to them. During
@@ -21,7 +21,6 @@ func NewRecord(size uint32) *Record {
 		size:  size,
 		alloc: 0,
 		data:  make([]byte, size),
-		mutex: &sync.RWMutex{},
 	}
 }
 
@@ -30,22 +29,23 @@ func NewRecord(size uint32) *Record {
 func (r *Record) Set(data []byte) {
 	dataLength := uint32(len(data))
 
-	r.mutex.Lock() // Lock for writing and reading
+	r.Lock() // Lock for writing and reading
 	if dataLength > r.size {
 		r.alloc = r.size
 	} else {
 		r.alloc = dataLength
 	}
 	copy(r.data, data)
-	r.mutex.Unlock() // Unlock for writing and reading
+	r.Unlock() // Unlock for writing and reading
 }
 
 // Get returns bytes based on size of virtual allocation. It means that it
-// returns only specific count of bytes, based on alloc property.
+// returns only specific count of bytes, based on alloc property. If array on
+// output is empty, then record is not exists.
 func (r *Record) Get() []byte {
-	r.mutex.RLock() // Lock for reading
+	r.RLock() // Lock for reading
 	data := r.data[:r.alloc]
-	r.mutex.RUnlock() // Unlock for reading
+	r.RUnlock() // Unlock for reading
 
 	return data
 }
@@ -53,23 +53,23 @@ func (r *Record) Get() []byte {
 // Free set alloc property to 0. Through this action, we empty memory of record
 // without calling garbage collector.
 func (r *Record) Free() {
-	r.mutex.Lock() // Lock for writing and reading
+	r.Lock() // Lock for writing and reading
 	r.alloc = 0
-	r.mutex.Unlock() // Unlock for writing and reading
+	r.Unlock() // Unlock for writing and reading
 }
 
 // GetAllocated returns size of allocated bytes.
 func (r *Record) GetAllocated() uint32 {
-	r.mutex.RLock() // Lock for reading
+	r.RLock() // Lock for reading
 	data := r.alloc
-	r.mutex.RUnlock() // Unlock for reading
+	r.RUnlock() // Unlock for reading
 	return data
 }
 
 // GetDataLength returns real size of allocated bytes in memory.
 func (r *Record) GetDataLength() uint32 {
-	r.mutex.RLock() // Lock for reading
+	r.RLock() // Lock for reading
 	data := uint32(len(r.data))
-	r.mutex.RUnlock() // Unlock for reading
+	r.RUnlock() // Unlock for reading
 	return data
 }

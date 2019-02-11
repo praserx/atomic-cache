@@ -7,11 +7,12 @@ import (
 
 // Shard structure contains multiple slots for records.
 type Shard struct {
+	sync.RWMutex
 	slotSize  uint32
 	slotCount uint32
 	slotAvail []uint32
 	slots     []*Record
-	mutex     *sync.RWMutex
+	tasks     sync.Map
 }
 
 // NewShard initialize list of records with specified size. List is stored
@@ -21,7 +22,6 @@ func NewShard(slotCount, slotSize uint32) *Shard {
 	shard := &Shard{
 		slotSize:  slotSize,
 		slotCount: slotCount,
-		mutex:     &sync.RWMutex{},
 	}
 
 	// Initialize available slots stack
@@ -37,42 +37,54 @@ func NewShard(slotCount, slotSize uint32) *Shard {
 	return shard
 }
 
-// Set ...
+// Set store data as a record and decrease slotAvail count. On output it return
+// index of used slot.
 func (s *Shard) Set(data []byte, expire time.Duration) uint32 {
 	var index uint32
 
-	s.mutex.Lock() // Lock for writing and reading
+	s.Lock() // Lock for writing and reading
 	index, s.slotAvail = s.slotAvail[0], s.slotAvail[1:]
-	s.mutex.Unlock() // Unlock for writing and reading
+	s.Unlock() // Unlock for writing and reading
 
+	// Set data
 	s.slots[index].Set(data)
-	go s.FreeAfterExpiration(index, expire) // TODO: It is probably not possible.
+
+	// Run expiration task
+	go s.FreeAfterExpiration(index, expire)
 
 	return index
 }
 
-// Get ...
+// Get returns bytes from shard memory based on index. If array on output is
+// empty, then record is not exists.
 func (s *Shard) Get(index uint32) []byte {
 	return s.slots[index].Get()
 }
 
-// Free ...
+// Free empty memory specified by index on input and increase slot counter.
 func (s *Shard) Free(index uint32) {
 	s.slots[index].Free()
 
-	s.mutex.Lock()
+	s.Lock()
 	s.slotAvail = append(s.slotAvail, index)
-	s.mutex.Unlock()
+	s.Unlock()
 }
 
-// FreeAfterExpiration ...
+// FreeAfterExpiration frees memory after destinated time. It requires index and
+// expiration time on input.
 func (s *Shard) FreeAfterExpiration(index uint32, expire time.Duration) {
+	currentTime := time.Now()
+
+	s.tasks.Store(currentTime, true)
+
 	timer := time.NewTimer(expire)
 	<-timer.C
 
 	s.slots[index].Free()
 
-	s.mutex.Lock()
+	s.Lock()
 	s.slotAvail = append(s.slotAvail, index)
-	s.mutex.Unlock()
+	s.Unlock()
+
+	s.tasks.Delete(currentTime)
 }
