@@ -2,27 +2,20 @@ package atomiccache
 
 import (
 	"sync"
-	"time"
 )
 
 // Shard structure contains multiple slots for records.
 type Shard struct {
 	sync.RWMutex
-	slotSize  uint32
-	slotCount uint32
 	slotAvail []uint32
 	slots     []*Record
-	tasks     sync.Map
 }
 
 // NewShard initialize list of records with specified size. List is stored
 // in property records and every record has it's own unique id (id is not
 // propagated to record instance).
 func NewShard(slotCount, slotSize uint32) *Shard {
-	shard := &Shard{
-		slotSize:  slotSize,
-		slotCount: slotCount,
-	}
+	shard := &Shard{}
 
 	// Initialize available slots stack
 	for i := uint32(0); i < slotCount; i++ {
@@ -39,7 +32,7 @@ func NewShard(slotCount, slotSize uint32) *Shard {
 
 // Set store data as a record and decrease slotAvail count. On output it return
 // index of used slot.
-func (s *Shard) Set(data []byte, expire time.Duration) uint32 {
+func (s *Shard) Set(data []byte) uint32 {
 	var index uint32
 
 	s.Lock() // Lock for writing and reading
@@ -48,9 +41,6 @@ func (s *Shard) Set(data []byte, expire time.Duration) uint32 {
 
 	// Set data
 	s.slots[index].Set(data)
-
-	// Run expiration task
-	go s.FreeAfterExpiration(index, expire)
 
 	return index
 }
@@ -70,21 +60,7 @@ func (s *Shard) Free(index uint32) {
 	s.Unlock()
 }
 
-// FreeAfterExpiration frees memory after destinated time. It requires index and
-// expiration time on input.
-func (s *Shard) FreeAfterExpiration(index uint32, expire time.Duration) {
-	currentTime := time.Now()
-
-	s.tasks.Store(currentTime, true)
-
-	timer := time.NewTimer(expire)
-	<-timer.C
-
-	s.slots[index].Free()
-
-	s.Lock()
-	s.slotAvail = append(s.slotAvail, index)
-	s.Unlock()
-
-	s.tasks.Delete(currentTime)
+// GetSlotsAvail returns number of available memory slots of shard.
+func (s *Shard) GetSlotsAvail() uint32 {
+	return uint32(len(s.slotAvail))
 }
