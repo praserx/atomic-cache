@@ -39,8 +39,9 @@ func (s *Shard) Set(data []byte) uint32 {
 	index, s.slotAvail = s.slotAvail[0], s.slotAvail[1:]
 	s.Unlock() // Unlock for writing and reading
 
-	// Set data
+	s.RLock()
 	s.slots[index].Set(data)
+	s.RUnlock()
 
 	return index
 }
@@ -48,19 +49,24 @@ func (s *Shard) Set(data []byte) uint32 {
 // Get returns bytes from shard memory based on index. If array on output is
 // empty, then record is not exists.
 func (s *Shard) Get(index uint32) []byte {
-	return s.slots[index].Get()
+	s.RLock()
+	value := s.slots[index].Get()
+	s.RUnlock()
+	return value
 }
 
 // Free empty memory specified by index on input and increase slot counter.
 func (s *Shard) Free(index uint32) {
-	s.slots[index].Free()
-
 	s.Lock()
+	s.slots[index].Free()
 	s.slotAvail = append(s.slotAvail, index)
 	s.Unlock()
 }
 
 // GetSlotsAvail returns number of available memory slots of shard.
 func (s *Shard) GetSlotsAvail() uint32 {
-	return uint32(len(s.slotAvail))
+	s.RLock()
+	slotAvailCnt := uint32(len(s.slotAvail))
+	s.RUnlock()
+	return slotAvailCnt
 }
