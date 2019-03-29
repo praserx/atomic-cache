@@ -8,16 +8,16 @@ import (
 
 func TestShardSimple(t *testing.T) {
 	for _, c := range []struct {
-		slotCount uint32
-		slotSize  uint32
-		in        []byte
-		want      []byte
+		recordCount uint32
+		recordSize  uint32
+		in          []byte
+		want        []byte
 	}{
 		{256, 2048, []byte{0}, []byte{0}},
 		{256, 2048, []byte{0, 1, 2, 3, 4, 5}, []byte{0, 1, 2, 3, 4, 5}},
 		{256, 1, []byte{0, 1, 2}, []byte{0}},
 	} {
-		shard := NewShard(c.slotCount, c.slotSize)
+		shard := NewShard(c.recordCount, c.recordSize)
 		index := shard.Set(c.in)
 		if !reflect.DeepEqual(shard.Get(index), c.want) {
 			t.Errorf("%v != %v", shard.Get(index), c.want)
@@ -25,11 +25,11 @@ func TestShardSimple(t *testing.T) {
 	}
 }
 
-func benchmarkShardNew(slotCount, slotSize uint32, b *testing.B) {
+func benchmarkShardNew(recordCount, recordSize uint32, b *testing.B) {
 	b.ReportAllocs()
 
 	for n := 0; n < b.N; n++ {
-		NewShard(slotCount, slotSize)
+		NewShard(recordCount, recordSize)
 	}
 }
 
@@ -45,11 +45,11 @@ func BenchmarkShardNew2048(b *testing.B) {
 	benchmarkShardNew(2048, 2048, b)
 }
 
-func benchmarkShardSet(slotCount, slotSize, dataSize uint32, b *testing.B) {
+func benchmarkShardSet(recordCount, recordSize, dataSize uint32, b *testing.B) {
 	b.ReportAllocs()
 
 	var data []byte
-	shard := NewShard(slotCount, slotSize)
+	shard := NewShard(recordCount, recordSize)
 
 	for i := uint32(0); i < dataSize; i++ {
 		data = append(data, 1)
@@ -75,11 +75,15 @@ func BenchmarkShardSet2048(b *testing.B) {
 	benchmarkShardSet(2048, 2048, 2048, b)
 }
 
-func benchmarkShardGet(slotCount, slotSize, dataSize uint32, b *testing.B) {
+func BenchmarkShardSet16384(b *testing.B) {
+	benchmarkShardSet(16384, 2048, 2048, b)
+}
+
+func benchmarkShardGet(recordCount, recordSize, dataSize uint32, b *testing.B) {
 	b.ReportAllocs()
 
 	var data []byte
-	shard := NewShard(slotCount, slotSize)
+	shard := NewShard(recordCount, recordSize)
 
 	for i := uint32(0); i < dataSize; i++ {
 		data = append(data, 1)

@@ -8,17 +8,17 @@ import (
 
 func TestCacheSimple(t *testing.T) {
 	for i, c := range []struct {
-		slotCount  uint32
-		slotSize   uint32
-		shardCount uint32
-		in         []byte
-		want       []byte
+		recordCount uint32
+		recordSize  uint32
+		shardCount  uint32
+		in          []byte
+		want        []byte
 	}{
 		{4096, 4096, 2048, []byte{0}, []byte{0}},
 		{4096, 4096, 2048, []byte{0, 1, 2, 3, 4, 5}, []byte{0, 1, 2, 3, 4, 5}},
 		{4096, 1, 2048, []byte{0, 1, 2}, []byte{0}},
 	} {
-		cache := New(OptionMaxRecords(c.slotCount), OptionRecordSize(c.slotSize), OptionMaxShards(c.shardCount))
+		cache := New(OptionMaxRecords(c.recordCount), OptionRecordSize(c.recordSize), OptionMaxShards(c.shardCount))
 		if err := cache.Set([]byte{byte(i)}, c.in, 0); err != nil {
 			t.Errorf("Set error: %s", err.Error())
 		}
@@ -58,11 +58,11 @@ func TestCacheFreeExpiration(t *testing.T) {
 }
 
 // benchmarkCacheNew is generic cache initialization benchmark.
-func benchmarkCacheNew(slotCount, slotSize, shardCount uint32, b *testing.B) {
+func benchmarkCacheNew(recordCount, recordSize, shardCount uint32, b *testing.B) {
 	b.ReportAllocs()
 
 	for n := 0; n < b.N; n++ {
-		New(OptionMaxRecords(slotCount), OptionRecordSize(slotSize), OptionMaxShards(shardCount))
+		New(OptionMaxRecords(recordCount), OptionRecordSize(recordSize), OptionMaxShards(shardCount))
 	}
 }
 
@@ -75,14 +75,14 @@ func BenchmarkCacheNewMedium(b *testing.B) {
 }
 
 func BenchmarkCacheNewLarge(b *testing.B) {
-	benchmarkCacheNew(8192, 4096, 2048, b)
+	benchmarkCacheNew(16384, 4096, 256, b)
 }
 
-func benchmarkCacheSet(slotCount, slotSize, shardCount, dataSize uint32, b *testing.B) {
+func benchmarkCacheSet(recordCount, recordSize, shardCount, dataSize uint32, b *testing.B) {
 	b.ReportAllocs()
 
 	var data []byte
-	cache := New(OptionMaxRecords(slotCount), OptionRecordSize(slotSize), OptionMaxShards(shardCount))
+	cache := New(OptionMaxRecords(recordCount), OptionRecordSize(recordSize), OptionMaxShards(shardCount))
 
 	for i := uint32(0); i < dataSize; i++ {
 		data = append(data, 1)
@@ -104,14 +104,14 @@ func BenchmarkCacheSetMedium(b *testing.B) {
 }
 
 func BenchmarkCacheSetLarge(b *testing.B) {
-	benchmarkCacheSet(8192, 4096, 2048, 1024, b)
+	benchmarkCacheSet(16384, 4096, 256, 1024, b)
 }
 
-func benchmarkCacheGet(slotCount, slotSize, shardCount, dataSize uint32, b *testing.B) {
+func benchmarkCacheGet(recordCount, recordSize, shardCount, dataSize uint32, b *testing.B) {
 	b.ReportAllocs()
 
 	var data []byte
-	cache := New(OptionMaxRecords(slotCount), OptionRecordSize(slotSize), OptionMaxShards(shardCount))
+	cache := New(OptionMaxRecords(recordCount), OptionRecordSize(recordSize), OptionMaxShards(shardCount))
 
 	for i := uint32(0); i < dataSize; i++ {
 		data = append(data, 1)
@@ -135,41 +135,5 @@ func BenchmarkCacheGetMedium(b *testing.B) {
 }
 
 func BenchmarkCacheGetLarge(b *testing.B) {
-	benchmarkCacheGet(8192, 4096, 2048, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance01(b *testing.B) {
-	benchmarkCacheSet(8192, 4096, 1024, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance02(b *testing.B) {
-	benchmarkCacheSet(512, 4096, 4096, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance03(b *testing.B) {
-	benchmarkCacheSet(512, 4096, 8192, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance04(b *testing.B) {
-	benchmarkCacheSet(256, 4096, 8192, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance05(b *testing.B) {
-	benchmarkCacheSet(128, 4096, 8192, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance06(b *testing.B) {
-	benchmarkCacheSet(64, 4096, 8192, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance07(b *testing.B) {
-	benchmarkCacheSet(64, 4096, 4096, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance08(b *testing.B) {
-	benchmarkCacheSet(64, 4096, 2048, 1024, b)
-}
-
-func BenchmarkCacheSetPerformance09(b *testing.B) {
-	benchmarkCacheSet(64, 4096, 1024, 1024, b)
+	benchmarkCacheGet(16384, 4096, 256, 1024, b)
 }

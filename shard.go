@@ -70,3 +70,17 @@ func (s *Shard) GetSlotsAvail() uint32 {
 	s.RUnlock()
 	return slotAvailCnt
 }
+
+// IsEmpty return true if shard has no record registered. Otherwise return
+// false.
+func (s *Shard) IsEmpty() bool {
+	result := false
+
+	s.RLock()
+	if len(s.slotAvail) == len(s.slots) {
+		result = true
+	}
+	s.RUnlock()
+
+	return result
+}
