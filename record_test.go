@@ -2,7 +2,6 @@ package atomiccache
 
 import (
 	"reflect"
-	"sync"
 	"testing"
 )
 
@@ -44,15 +43,15 @@ func benchmarkRecordNew(size uint32, b *testing.B) {
 	}
 }
 
-func BenchmarkRecordNew512(b *testing.B) {
+func BenchmarkRecordNewSmall(b *testing.B) {
 	benchmarkRecordNew(512, b)
 }
 
-func BenchmarkRecordNew1024(b *testing.B) {
+func BenchmarkRecordNewMedium(b *testing.B) {
 	benchmarkRecordNew(1024, b)
 }
 
-func BenchmarkRecordNew2048(b *testing.B) {
+func BenchmarkRecordNewLarge(b *testing.B) {
 	benchmarkRecordNew(2048, b)
 }
 
@@ -73,15 +72,15 @@ func benchmarkRecordSet(size uint32, b *testing.B) {
 	}
 }
 
-func BenchmarkRecordSet512(b *testing.B) {
+func BenchmarkRecordSetSmall(b *testing.B) {
 	benchmarkRecordSet(512, b)
 }
 
-func BenchmarkRecordSet1024(b *testing.B) {
+func BenchmarkRecordSetMedium(b *testing.B) {
 	benchmarkRecordSet(1024, b)
 }
 
-func BenchmarkRecordSet2048(b *testing.B) {
+func BenchmarkRecordSetLarge(b *testing.B) {
 	benchmarkRecordSet(2048, b)
 }
 
@@ -103,40 +102,14 @@ func benchmarkRecordGet(size uint32, b *testing.B) {
 	}
 }
 
-func BenchmarkRecordGet512(b *testing.B) {
+func BenchmarkRecordGetSmall(b *testing.B) {
 	benchmarkRecordGet(512, b)
 }
 
-func BenchmarkRecordGet1024(b *testing.B) {
+func BenchmarkRecordGetMedium(b *testing.B) {
 	benchmarkRecordGet(1024, b)
 }
 
-func BenchmarkRecordGet2048(b *testing.B) {
+func BenchmarkRecordGetLarge(b *testing.B) {
 	benchmarkRecordGet(2048, b)
-}
-
-func BenchmarkRecordGet2048Concurrent(b *testing.B) {
-	b.ReportAllocs()
-
-	var data []byte
-	var wg sync.WaitGroup
-
-	record := NewRecord(2048)
-
-	for i := uint32(0); i < 2048; i++ {
-		data = append(data, 1)
-	}
-
-	record.Set(data)
-
-	b.ResetTimer()
-
-	for n := 0; n < b.N; n++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			record.Get()
-		}()
-	}
-	wg.Wait()
 }

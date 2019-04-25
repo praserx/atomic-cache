@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cespare/xxhash"
@@ -19,8 +20,10 @@ var (
 type AtomicCache struct {
 	// RWMutex is used for access to shards array.
 	sync.RWMutex
-	// Lookup table with hashed values as key and LookupRecord as conent.
-	lookup sync.Map
+	// // Lookup table with hashed values as key and LookupRecord as conent.
+	// lookup sync.Map
+	// Lookup
+	lookup map[uint64]LookupRecord
 
 	// Array of pointers to shard objects.
 	shards []*Shard
@@ -35,13 +38,18 @@ type AtomicCache struct {
 	MaxRecords uint32
 	// Maximum shards for allocation.
 	MaxShards uint32
+
+	// Garbage collector starter (run garbage collection every X memory sets).
+	GcStarter uint32
+	// Garbage collector counter for starter.
+	GcCounter uint32
 }
 
 // LookupRecord ...
 type LookupRecord struct {
 	RecordIndex uint32
 	ShardIndex  uint32
-	Expiration  time.Duration
+	Expiration  time.Time
 }
 
 // New ...
@@ -50,6 +58,7 @@ func New(opts ...Option) *AtomicCache {
 		RecordSize: 4096,
 		MaxRecords: 4096,
 		MaxShards:  128,
+		GcStarter:  5000,
 	}
 
 	for _, opt := range opts {
@@ -58,6 +67,9 @@ func New(opts ...Option) *AtomicCache {
 
 	// Init cache structure
 	cache := &AtomicCache{}
+
+	// Init lookup table
+	cache.lookup = make(map[uint64]LookupRecord)
 
 	// Init shards list with nil values
 	cache.shards = make([]*Shard, options.MaxShards, options.MaxShards)
@@ -71,6 +83,7 @@ func New(opts ...Option) *AtomicCache {
 	cache.RecordSize = options.RecordSize
 	cache.MaxRecords = options.MaxRecords
 	cache.MaxShards = options.MaxShards
+	cache.GcStarter = options.GcStarter
 
 	// Setup seed for random number generation
 	rand.Seed(time.Now().UnixNano())
@@ -80,28 +93,33 @@ func New(opts ...Option) *AtomicCache {
 
 // Set ...
 func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
-	if val, ok := a.lookup.Load(xxhash.Sum64(key)); ok == true {
-		a.RLock()
-		a.shards[val.(LookupRecord).ShardIndex].Free(val.(LookupRecord).RecordIndex)
-		a.shards[val.(LookupRecord).ShardIndex].Set(data)
-		a.RUnlock()
+	a.Lock()
+	if val, ok := a.lookup[xxhash.Sum64(key)]; ok {
+		a.shards[val.ShardIndex].Free(val.RecordIndex)
+		a.shards[val.ShardIndex].Set(data)
 	} else {
-		a.Lock()
 		if si, ok := a.getShard(); ok == true {
 			ri := a.shards[si].Set(data)
-			a.lookup.Store(xxhash.Sum64(key), LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: expire})
+			a.lookup[xxhash.Sum64(key)] = LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: a.getExprTime(expire)}
 		} else if si, ok := a.getEmptyShard(); ok == true {
 			a.shards[si] = NewShard(a.MaxRecords, a.RecordSize)
 			ri := a.shards[si].Set(data)
-			a.lookup.Store(xxhash.Sum64(key), LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: expire})
+			a.lookup[xxhash.Sum64(key)] = LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: a.getExprTime(expire)}
 		} else {
-			si := uint32(rand.Intn(int(a.MaxShards)))
-			ri := uint32(rand.Intn(int(a.MaxRecords)))
-			a.shards[si].Free(ri)
-			a.shards[si].Set(data)
-			a.lookup.Store(xxhash.Sum64(key), LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: expire})
+			for k, v := range a.lookup {
+				delete(a.lookup, k)
+				a.shards[v.ShardIndex].Free(v.RecordIndex)
+				v.RecordIndex = a.shards[v.ShardIndex].Set(data)
+				a.lookup[xxhash.Sum64(key)] = LookupRecord{ShardIndex: v.ShardIndex, RecordIndex: v.RecordIndex, Expiration: a.getExprTime(expire)}
+				break
+			}
 		}
-		a.Unlock()
+	}
+	a.Unlock()
+
+	if atomic.AddUint32(&a.GcCounter, 1) == a.GcStarter {
+		atomic.StoreUint32(&a.GcCounter, 0)
+		go a.collectGarbage()
 	}
 
 	return nil
@@ -111,19 +129,19 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 // not found, then error is returned and list is nil.
 func (a *AtomicCache) Get(key []byte) ([]byte, error) {
 	var result []byte
-	var notfound = true
+	var hit = false
 
-	if val, ok := a.lookup.Load(xxhash.Sum64(key)); ok == true {
-		a.RLock()
-		if a.shards[val.(LookupRecord).ShardIndex] != nil {
-			result = a.shards[val.(LookupRecord).ShardIndex].Get(val.(LookupRecord).RecordIndex)
-			notfound = false
+	a.RLock()
+	if val, ok := a.lookup[xxhash.Sum64(key)]; ok {
+		if a.shards[val.ShardIndex] != nil { //&& time.Now().Before(val.Expiration) {
+			result = a.shards[val.ShardIndex].Get(val.RecordIndex)
+			hit = true
 		}
-		a.RUnlock()
+	}
+	a.RUnlock()
 
-		if !notfound {
-			return result, nil
-		}
+	if hit {
+		return result, nil
 	}
 
 	return nil, errNotFound
@@ -168,4 +186,27 @@ func (a *AtomicCache) getEmptyShard() (uint32, bool) {
 	shardIndex, a.shardsAvail = a.shardsAvail[0], a.shardsAvail[1:]
 
 	return shardIndex, true
+}
+
+// getExprTime return expiration time based on duration. If duration is 0, then
+// maximum expiration time is used (48 hours).
+func (a *AtomicCache) getExprTime(expire time.Duration) time.Time {
+	if expire == 0 {
+		return time.Now().Add(48 * time.Hour)
+	}
+
+	return time.Now().Add(expire)
+}
+
+// collectGarbage ...
+func (a *AtomicCache) collectGarbage() {
+	a.Lock()
+	for k, v := range a.lookup {
+		if time.Now().After(v.Expiration) {
+			a.shards[v.ShardIndex].Free(v.RecordIndex)
+			a.releaseShard(v.ShardIndex)
+			delete(a.lookup, k)
+		}
+	}
+	a.Unlock()
 }

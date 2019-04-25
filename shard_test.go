@@ -2,7 +2,6 @@ package atomiccache
 
 import (
 	"reflect"
-	"sync"
 	"testing"
 )
 
@@ -33,16 +32,16 @@ func benchmarkShardNew(recordCount, recordSize uint32, b *testing.B) {
 	}
 }
 
-func BenchmarkShardNew512(b *testing.B) {
+func BenchmarkShardNewSmall(b *testing.B) {
 	benchmarkShardNew(512, 2048, b)
 }
 
-func BenchmarkShardNew1024(b *testing.B) {
-	benchmarkShardNew(1024, 2048, b)
+func BenchmarkShardNewMedium(b *testing.B) {
+	benchmarkShardNew(2048, 2048, b)
 }
 
-func BenchmarkShardNew2048(b *testing.B) {
-	benchmarkShardNew(2048, 2048, b)
+func BenchmarkShardNewLarge(b *testing.B) {
+	benchmarkShardNew(16384, 4096, b)
 }
 
 func benchmarkShardSet(recordCount, recordSize, dataSize uint32, b *testing.B) {
@@ -63,20 +62,16 @@ func benchmarkShardSet(recordCount, recordSize, dataSize uint32, b *testing.B) {
 	}
 }
 
-func BenchmarkShardSet512(b *testing.B) {
+func BenchmarkShardSetSmall(b *testing.B) {
 	benchmarkShardSet(2048, 2048, 512, b)
 }
 
-func BenchmarkShardSet1024(b *testing.B) {
+func BenchmarkShardSetMedium(b *testing.B) {
 	benchmarkShardSet(2048, 2048, 1024, b)
 }
 
-func BenchmarkShardSet2048(b *testing.B) {
-	benchmarkShardSet(2048, 2048, 2048, b)
-}
-
-func BenchmarkShardSet16384(b *testing.B) {
-	benchmarkShardSet(16384, 2048, 2048, b)
+func BenchmarkShardSetLarge(b *testing.B) {
+	benchmarkShardSet(16384, 4096, 2048, b)
 }
 
 func benchmarkShardGet(recordCount, recordSize, dataSize uint32, b *testing.B) {
@@ -100,40 +95,14 @@ func benchmarkShardGet(recordCount, recordSize, dataSize uint32, b *testing.B) {
 	shard.Free(index)
 }
 
-func BenchmarkShardGet512(b *testing.B) {
+func BenchmarkShardGetSmall(b *testing.B) {
 	benchmarkShardGet(2048, 2048, 512, b)
 }
 
-func BenchmarkShardGet1024(b *testing.B) {
+func BenchmarkShardGetMedium(b *testing.B) {
 	benchmarkShardGet(2048, 2048, 1024, b)
 }
 
-func BenchmarkShardGet2048(b *testing.B) {
-	benchmarkShardGet(2048, 2048, 2048, b)
-}
-
-func BenchmarkShardGet2048Concurrent(b *testing.B) {
-	b.ReportAllocs()
-
-	var data []byte
-	var wg sync.WaitGroup
-
-	shard := NewShard(2048, 2048)
-
-	for i := uint32(0); i < 2048; i++ {
-		data = append(data, 1)
-	}
-
-	index := shard.Set(data)
-
-	b.ResetTimer()
-
-	for n := 0; n < b.N; n++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			shard.Get(index)
-		}()
-	}
-	wg.Wait()
+func BenchmarkShardGetLarge(b *testing.B) {
+	benchmarkShardGet(16384, 4096, 2048, b)
 }

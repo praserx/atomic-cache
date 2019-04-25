@@ -2,6 +2,8 @@ package atomiccache
 
 import (
 	"reflect"
+	"time"
+
 	// "sync"
 	"testing"
 )
@@ -34,27 +36,23 @@ func TestCacheSimple(t *testing.T) {
 	}
 }
 
-func TestCacheFreeExpiration(t *testing.T) {
-	// var data []byte
-	// shard := NewShard(2048, 2048)
+func TestCacheFreeAfterExpiration(t *testing.T) {
+	cache := New(OptionMaxRecords(512), OptionRecordSize(2048), OptionMaxShards(48), OptionGcStarter(1))
 
-	// for i := uint32(0); i < 2048; i++ {
-	// 	data = append(data, 1)
-	// }
+	cache.Set([]byte("key"), []byte("data"), 500*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
-	// index := shard.Set(data, 500*time.Millisecond)
+	if _, err := cache.Get([]byte("key")); err != nil {
+		t.Errorf("Cache is empty, but expecting some data")
+	}
+	time.Sleep(500 * time.Millisecond)
 
-	// time.Sleep(100 * time.Millisecond)
+	cache.Set([]byte("key2"), []byte("data"), 500*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
-	// if len(shard.Get(index)) == 0 {
-	// 	t.Errorf("Cache is empty, but expecting some data")
-	// }
-
-	// time.Sleep(500 * time.Millisecond)
-
-	// if len(shard.Get(index)) != 0 {
-	// 	t.Errorf("Cache is not empty, but expecting nothing")
-	// }
+	if _, err := cache.Get([]byte("key")); err == nil {
+		t.Errorf("Cache is not empty, but expecting nothing")
+	}
 }
 
 // benchmarkCacheNew is generic cache initialization benchmark.
@@ -79,8 +77,6 @@ func BenchmarkCacheNewLarge(b *testing.B) {
 }
 
 func benchmarkCacheSet(recordCount, recordSize, shardCount, dataSize uint32, b *testing.B) {
-	b.ReportAllocs()
-
 	var data []byte
 	cache := New(OptionMaxRecords(recordCount), OptionRecordSize(recordSize), OptionMaxShards(shardCount))
 
@@ -88,6 +84,7 @@ func benchmarkCacheSet(recordCount, recordSize, shardCount, dataSize uint32, b *
 		data = append(data, 1)
 	}
 
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
@@ -108,8 +105,6 @@ func BenchmarkCacheSetLarge(b *testing.B) {
 }
 
 func benchmarkCacheGet(recordCount, recordSize, shardCount, dataSize uint32, b *testing.B) {
-	b.ReportAllocs()
-
 	var data []byte
 	cache := New(OptionMaxRecords(recordCount), OptionRecordSize(recordSize), OptionMaxShards(shardCount))
 
@@ -119,6 +114,7 @@ func benchmarkCacheGet(recordCount, recordSize, shardCount, dataSize uint32, b *
 
 	cache.Set([]byte{byte(1)}, data, 0)
 
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
