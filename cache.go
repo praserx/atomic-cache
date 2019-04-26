@@ -2,7 +2,6 @@ package atomiccache
 
 import (
 	"errors"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,10 +12,10 @@ import (
 // Internal cache errors
 var (
 	errNotFound  = errors.New("Record not found")
-	errSetRecord = errors.New("Can't create new record, hit fail is too high")
+	errDataLimit = errors.New("Can't create new record, it violates data limit")
 )
 
-// AtomicCache ...
+// AtomicCache structure represents whole cache memory.
 type AtomicCache struct {
 	// RWMutex is used for access to shards array.
 	sync.RWMutex
@@ -45,14 +44,16 @@ type AtomicCache struct {
 	GcCounter uint32
 }
 
-// LookupRecord ...
+// LookupRecord represents item in lookup table. One record contains index of
+// shard and record. So we can determine which shard access and which record of
+// shard to get. Record also contains expiration time.
 type LookupRecord struct {
 	RecordIndex uint32
 	ShardIndex  uint32
 	Expiration  time.Time
 }
 
-// New ...
+// New initialize whole cache memory with one allocated shard.
 func New(opts ...Option) *AtomicCache {
 	var options = &Options{
 		RecordSize: 4096,
@@ -85,32 +86,39 @@ func New(opts ...Option) *AtomicCache {
 	cache.MaxShards = options.MaxShards
 	cache.GcStarter = options.GcStarter
 
-	// Setup seed for random number generation
-	rand.Seed(time.Now().UnixNano())
-
 	return cache
 }
 
-// Set ...
+// Set store data to cache memory. If key/record is already in memory, then data
+// are replaced. If not, it checks if there are some allocated shard with empty
+// space for data. If there is no empty space, new shard is allocated. Otherwise
+// some valid record (FIFO queue) is deleted and new one is stored.
 func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
+	if len(data) > int(a.RecordSize) {
+		return errDataLimit
+	}
+
+	hash := xxhash.Sum64(key)
+
 	a.Lock()
-	if val, ok := a.lookup[xxhash.Sum64(key)]; ok {
+	if val, ok := a.lookup[hash]; ok {
 		a.shards[val.ShardIndex].Free(val.RecordIndex)
-		a.shards[val.ShardIndex].Set(data)
+		val.RecordIndex = a.shards[val.ShardIndex].Set(data)
+		a.lookup[hash] = LookupRecord{ShardIndex: val.ShardIndex, RecordIndex: val.RecordIndex, Expiration: a.getExprTime(expire)}
 	} else {
-		if si, ok := a.getShard(); ok == true {
+		if si, ok := a.getShard(); ok {
 			ri := a.shards[si].Set(data)
-			a.lookup[xxhash.Sum64(key)] = LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: a.getExprTime(expire)}
-		} else if si, ok := a.getEmptyShard(); ok == true {
+			a.lookup[hash] = LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: a.getExprTime(expire)}
+		} else if si, ok := a.getEmptyShard(); ok {
 			a.shards[si] = NewShard(a.MaxRecords, a.RecordSize)
 			ri := a.shards[si].Set(data)
-			a.lookup[xxhash.Sum64(key)] = LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: a.getExprTime(expire)}
+			a.lookup[hash] = LookupRecord{ShardIndex: si, RecordIndex: ri, Expiration: a.getExprTime(expire)}
 		} else {
 			for k, v := range a.lookup {
 				delete(a.lookup, k)
 				a.shards[v.ShardIndex].Free(v.RecordIndex)
 				v.RecordIndex = a.shards[v.ShardIndex].Set(data)
-				a.lookup[xxhash.Sum64(key)] = LookupRecord{ShardIndex: v.ShardIndex, RecordIndex: v.RecordIndex, Expiration: a.getExprTime(expire)}
+				a.lookup[hash] = LookupRecord{ShardIndex: v.ShardIndex, RecordIndex: v.RecordIndex, Expiration: a.getExprTime(expire)}
 				break
 			}
 		}
@@ -198,7 +206,8 @@ func (a *AtomicCache) getExprTime(expire time.Duration) time.Time {
 	return time.Now().Add(expire)
 }
 
-// collectGarbage ...
+// collectGarbage provides garbage collect. It goes throught lookup table and
+// checks expiration time.
 func (a *AtomicCache) collectGarbage() {
 	a.Lock()
 	for k, v := range a.lookup {

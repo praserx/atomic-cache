@@ -18,7 +18,6 @@ func TestCacheSimple(t *testing.T) {
 	}{
 		{4096, 4096, 2048, []byte{0}, []byte{0}},
 		{4096, 4096, 2048, []byte{0, 1, 2, 3, 4, 5}, []byte{0, 1, 2, 3, 4, 5}},
-		{4096, 1, 2048, []byte{0, 1, 2}, []byte{0}},
 	} {
 		cache := New(OptionMaxRecords(c.recordCount), OptionRecordSize(c.recordSize), OptionMaxShards(c.shardCount))
 		if err := cache.Set([]byte{byte(i)}, c.in, 0); err != nil {
@@ -32,6 +31,23 @@ func TestCacheSimple(t *testing.T) {
 
 		if !reflect.DeepEqual(value, c.want) {
 			t.Errorf("%v != %v", value, c.want)
+		}
+	}
+}
+
+func TestCacheDataError(t *testing.T) {
+	for i, c := range []struct {
+		recordCount uint32
+		recordSize  uint32
+		shardCount  uint32
+		in          []byte
+		want        []byte
+	}{
+		{4096, 1, 2048, []byte{0, 1, 2}, []byte{0}},
+	} {
+		cache := New(OptionMaxRecords(c.recordCount), OptionRecordSize(c.recordSize), OptionMaxShards(c.shardCount))
+		if err := cache.Set([]byte{byte(i)}, c.in, 0); err == nil {
+			t.Errorf("Expecting error 'errDataLimit'")
 		}
 	}
 }
