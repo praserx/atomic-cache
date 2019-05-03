@@ -13,7 +13,8 @@ type Shard struct {
 
 // NewShard initialize list of records with specified size. List is stored
 // in property records and every record has it's own unique id (id is not
-// propagated to record instance).
+// propagated to record instance). Argument slotCount represents number of
+// records in shard and slotSize represents size of one record.
 func NewShard(slotCount, slotSize uint32) *Shard {
 	shard := &Shard{}
 

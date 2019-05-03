@@ -24,6 +24,34 @@ func TestShardSimple(t *testing.T) {
 	}
 }
 
+func TestShardIntermediate(t *testing.T) {
+	for _, c := range []struct {
+		recordCount uint32
+		recordSize  uint32
+		in          []byte
+		want        []byte
+	}{
+		{1024, 1024, []byte("test value"), []byte("test value")},
+	} {
+		var indexes []uint32
+		shard := NewShard(c.recordCount, c.recordSize)
+		
+		for i := uint32(0); i < c.recordCount; i++ {
+			indexes = append(indexes, shard.Set(c.in))
+		}
+
+		// Check if value on index 0 is present
+		if !reflect.DeepEqual(shard.Get(indexes[0]), c.want) {
+			t.Errorf("%v != %v", shard.Get(indexes[0]), c.want)
+		}
+
+		// Check if value on index 128 is present
+		if !reflect.DeepEqual(shard.Get(indexes[128]), c.want) {
+			t.Errorf("%v != %v", shard.Get(indexes[0]), c.want)
+		}
+	}
+}
+
 func benchmarkShardNew(recordCount, recordSize uint32, b *testing.B) {
 	b.ReportAllocs()
 
