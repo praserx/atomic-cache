@@ -80,6 +80,12 @@ func New(opts ...Option) *AtomicCache {
 		cache.shardsAvail = append(cache.shardsAvail, i)
 	}
 
+	// Create start shard
+	var shardIndex uint32
+	shardIndex, cache.shardsAvail = cache.shardsAvail[0], cache.shardsAvail[1:]
+	cache.shardsActive = append(cache.shardsActive, shardIndex)
+	cache.shards[shardIndex] = NewShard(options.MaxRecords, options.RecordSize)
+
 	// Define setup values
 	cache.RecordSize = options.RecordSize
 	cache.MaxRecords = options.MaxRecords
@@ -207,13 +213,17 @@ func (a *AtomicCache) getExprTime(expire time.Duration) time.Time {
 }
 
 // collectGarbage provides garbage collect. It goes throught lookup table and
-// checks expiration time.
+// checks expiration time. If shard end up empty, then garbage collect release
+// him, but only if there is more than one shard in charge (we always have one
+// active shard).
 func (a *AtomicCache) collectGarbage() {
 	a.Lock()
 	for k, v := range a.lookup {
 		if time.Now().After(v.Expiration) {
 			a.shards[v.ShardIndex].Free(v.RecordIndex)
-			a.releaseShard(v.ShardIndex)
+			if len(a.shardsActive) > 1 {
+				a.releaseShard(v.ShardIndex)
+			}
 			delete(a.lookup, k)
 		}
 	}
