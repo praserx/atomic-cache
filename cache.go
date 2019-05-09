@@ -147,7 +147,7 @@ func (a *AtomicCache) Get(key []byte) ([]byte, error) {
 
 	a.RLock()
 	if val, ok := a.lookup[xxhash.Sum64(key)]; ok {
-		if a.shards[val.ShardIndex] != nil { //&& time.Now().Before(val.Expiration) {
+		if a.shards[val.ShardIndex] != nil && time.Now().Before(val.Expiration) {
 			result = a.shards[val.ShardIndex].Get(val.RecordIndex)
 			hit = true
 		}
