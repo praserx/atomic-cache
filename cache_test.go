@@ -4,8 +4,6 @@ import (
 	"reflect"
 	"time"
 	"encoding/binary"
-
-	// "sync"
 	"testing"
 )
 
@@ -104,7 +102,6 @@ func TestCacheFreeAfterExpiration(t *testing.T) {
 	}
 }
 
-// benchmarkCacheNew is generic cache initialization benchmark.
 func benchmarkCacheNew(recordCount, recordSize, shardCount uint32, b *testing.B) {
 	b.ReportAllocs()
 

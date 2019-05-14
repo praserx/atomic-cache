@@ -11,8 +11,8 @@ import (
 
 // Internal cache errors
 var (
-	errNotFound  = errors.New("Record not found")
-	errDataLimit = errors.New("Can't create new record, it violates data limit")
+	ErrNotFound  = errors.New("Record not found")
+	ErrDataLimit = errors.New("Can't create new record, it violates data limit")
 )
 
 // AtomicCache structure represents whole cache memory.
@@ -101,7 +101,7 @@ func New(opts ...Option) *AtomicCache {
 // some valid record (FIFO queue) is deleted and new one is stored.
 func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 	if len(data) > int(a.RecordSize) {
-		return errDataLimit
+		return ErrDataLimit
 	}
 
 	hash := xxhash.Sum64(key)
@@ -158,7 +158,7 @@ func (a *AtomicCache) Get(key []byte) ([]byte, error) {
 		return result, nil
 	}
 
-	return nil, errNotFound
+	return nil, ErrNotFound
 }
 
 // releaseShard release shard if there is no record in memory. It returns true
