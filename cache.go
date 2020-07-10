@@ -370,12 +370,17 @@ func (a *AtomicCache) collectGarbage() {
 		}
 	}
 
+	var localBuffer []BufferItem
+	copy(localBuffer, a.buffer)
+	a.buffer = []BufferItem{}
+
+	a.Unlock()
+
 	var bi BufferItem
-	for x := 0; x < len(a.buffer); x++ {
-		bi, a.buffer = a.buffer[0], a.buffer[1:]
+	for x := 0; x < len(localBuffer); x++ {
+		bi, localBuffer = localBuffer[0], localBuffer[1:]
 		if err := a.Set(bi.Key, bi.Data, bi.Expire); err != nil {
 			break
 		}
 	}
-	a.Unlock()
 }
