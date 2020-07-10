@@ -190,6 +190,7 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 			if len(a.buffer) <= int(a.MaxRecords) {
 				a.buffer = append(a.buffer, BufferItem{Key: key, Data: data, Expire: expire})
 			} else {
+				a.Unlock()
 				return ErrFullMemory
 			}
 
