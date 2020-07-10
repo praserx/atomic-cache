@@ -2,11 +2,11 @@ package atomiccache
 
 import (
 	"errors"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/emirpasic/gods/trees/btree"
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Internal cache errors
@@ -29,7 +29,8 @@ const (
 // AtomicCache structure represents whole cache memory.
 type AtomicCache struct {
 	// RWMutex is used for access to shards array.
-	sync.RWMutex
+	// sync.RWMutex
+	deadlock.RWMutex
 
 	// Lookup structure used for global index. It is based on BTree structure.
 	lookup *btree.Tree
