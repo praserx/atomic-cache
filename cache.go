@@ -160,6 +160,7 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 	}
 
 	new := false
+	collectGarbage := false
 	shardSection, shardSectionID := a.getShardsSectionBySize(len(data))
 
 	a.Lock()
@@ -195,12 +196,12 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 				return ErrFullMemory
 			}
 
-			go a.collectGarbage()
+			collectGarbage = true
 		}
 	}
 	a.Unlock()
 
-	if atomic.AddUint32(&a.GcCounter, 1) == a.GcStarter {
+	if (atomic.AddUint32(&a.GcCounter, 1) == a.GcStarter) || collectGarbage {
 		atomic.StoreUint32(&a.GcCounter, 0)
 		go a.collectGarbage()
 	}
