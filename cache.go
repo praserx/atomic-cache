@@ -5,8 +5,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/emirpasic/gods/trees/btree"
 )
 
 // Internal cache errors
@@ -33,8 +31,8 @@ type AtomicCache struct {
 	// Deadlock mutex for debugging purpose.
 	// deadlock.RWMutex
 
-	// Lookup structure used for global index. It is based on BTree structure.
-	lookup *btree.Tree
+	// Lookup structure used for global index. It is based on hashtable structure.
+	lookup map[string]LookupRecord
 
 	// Shards lookup tables which contains information about shards sections.
 	smallShards, mediumShards, largeShards ShardsLookup
@@ -116,7 +114,7 @@ func New(opts ...Option) *AtomicCache {
 	cache := &AtomicCache{}
 
 	// Init lookup table
-	cache.lookup = btree.NewWithStringComparator(3)
+	cache.lookup = make(map[string]LookupRecord)
 
 	// Init small shards section
 	initShardsSection(&cache.smallShards, options.MaxShardsSmall, options.MaxRecords, options.RecordSizeSmall)
@@ -165,15 +163,15 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 	shardSection, shardSectionID := a.getShardsSectionBySize(len(data))
 
 	a.Lock()
-	if ival, ok := a.lookup.Get(string(key)); !ok {
+	if ival, ok := a.lookup[string(key)]; !ok {
 		new = true
 	} else {
-		val := ival.(LookupRecord)
+		val := ival
 
 		if val.ShardSection != shardSectionID {
 			shardSection.shards[val.ShardIndex].Free(val.RecordIndex)
 			val.RecordIndex = shardSection.shards[val.ShardIndex].Set(data)
-			a.lookup.Put(string(key), LookupRecord{ShardIndex: val.ShardIndex, ShardSection: shardSectionID, RecordIndex: val.RecordIndex, Expiration: a.getExprTime(expire)})
+			a.lookup[string(key)] = LookupRecord{ShardIndex: val.ShardIndex, ShardSection: shardSectionID, RecordIndex: val.RecordIndex, Expiration: a.getExprTime(expire)}
 		} else {
 			prevShardSection := a.getShardsSectionByID(val.ShardSection)
 			prevShardSection.shards[val.ShardIndex].Free(val.RecordIndex)
@@ -184,11 +182,11 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 	if new {
 		if si, ok := a.getShard(shardSectionID); ok {
 			ri := shardSection.shards[si].Set(data)
-			a.lookup.Put(string(key), LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)})
+			a.lookup[string(key)] = LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)}
 		} else if si, ok := a.getEmptyShard(shardSectionID); ok {
 			shardSection.shards[si] = NewShard(a.MaxRecords, a.getRecordSizeByShardSectionID(shardSectionID))
 			ri := shardSection.shards[si].Set(data)
-			a.lookup.Put(string(key), LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)})
+			a.lookup[string(key)] = LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)}
 		} else {
 			if len(a.buffer) <= int(a.MaxRecords) {
 				a.buffer = append(a.buffer, BufferItem{Key: key, Data: data, Expire: expire})
@@ -217,8 +215,7 @@ func (a *AtomicCache) Get(key []byte) ([]byte, error) {
 	var hit = false
 
 	a.RLock()
-	if ival, ok := a.lookup.Get(string(key)); ok {
-		val := ival.(LookupRecord)
+	if val, ok := a.lookup[string(key)]; ok {
 		shardSection := a.getShardsSectionByID(val.ShardSection)
 
 		if shardSection.shards[val.ShardIndex] != nil && time.Now().Before(val.Expiration) {
@@ -358,16 +355,14 @@ func (a *AtomicCache) getExprTime(expire time.Duration) time.Time {
 // active shard).
 func (a *AtomicCache) collectGarbage() {
 	a.Lock()
-	for _, k := range a.lookup.Keys() {
-		iv, _ := a.lookup.Get(k.(string))                      // get record
-		v := iv.(LookupRecord)                                 // convert record from interface to LookupRecord
+	for k, v := range a.lookup {
 		shardSection := a.getShardsSectionByID(v.ShardSection) // get shard section
 		if time.Now().After(v.Expiration) {
 			shardSection.shards[v.ShardIndex].Free(v.RecordIndex)
 			if len(shardSection.shardsActive) > 1 {
 				a.releaseShard(v.ShardSection, v.ShardIndex)
 			}
-			a.lookup.Remove(k)
+			delete(a.lookup, k)
 		}
 	}
 
