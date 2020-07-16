@@ -248,6 +248,15 @@ func (a *AtomicCache) releaseShard(shardSectionID uint8, shard uint32) bool {
 
 	if shardSection.shards[shard].IsEmpty() == true {
 		shardSection.shards[shard] = nil
+
+		shardSection.shardsAvail = append(shardSection.shardsAvail, shard)
+		for k, v := range shardSection.shardsActive {
+			if v == shard {
+				shardSection.shardsActive = append(shardSection.shardsActive[:k], shardSection.shardsActive[k+1:]...)
+				break
+			}
+		}
+
 		return true
 	}
 
@@ -291,6 +300,7 @@ func (a *AtomicCache) getEmptyShard(shardSectionID uint8) (uint32, bool) {
 
 	var shardIndex uint32
 	shardIndex, shardSection.shardsAvail = shardSection.shardsAvail[0], shardSection.shardsAvail[1:]
+	shardSection.shardsActive = append(shardSection.shardsActive, shardIndex)
 
 	return shardIndex, true
 }
