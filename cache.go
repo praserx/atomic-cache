@@ -11,9 +11,9 @@ import (
 
 // Internal cache errors
 var (
-	ErrNotFound   = errors.New("Record not found")
-	ErrDataLimit  = errors.New("Can't create new record, it violates data limit")
-	ErrFullMemory = errors.New("Can't create new rocord, memory is full")
+	ErrNotFound   = errors.New("record not found")
+	ErrDataLimit  = errors.New("cannot create new record: it violates data limit")
+	ErrFullMemory = errors.New("cannot create new rocord: memory is full")
 )
 
 // Constans below are used for shard section identification.
@@ -116,7 +116,7 @@ func New(opts ...Option) *AtomicCache {
 	cache := &AtomicCache{}
 
 	// Init lookup table
-	cache.lookup = btree.NewWithStringComparator(3)
+	cache.lookup = btree.NewWithStringComparator(16)
 
 	// Init small shards section
 	initShardsSection(&cache.smallShards, options.MaxShardsSmall, options.MaxRecords, options.RecordSizeSmall)
@@ -141,7 +141,7 @@ func New(opts ...Option) *AtomicCache {
 func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recordSize uint32) {
 	var shardIndex uint32
 
-	shardsSection.shards = make([]*Shard, maxShards, maxShards)
+	shardsSection.shards = make([]*Shard, maxShards)
 	for i := uint32(0); i < maxShards; i++ {
 		shardsSection.shardsAvail = append(shardsSection.shardsAvail, i)
 	}
@@ -246,7 +246,7 @@ func (a *AtomicCache) releaseShard(shardSectionID uint8, shard uint32) bool {
 		return false
 	}
 
-	if shardSection.shards[shard].IsEmpty() == true {
+	if shardSection.shards[shard].IsEmpty() {
 		shardSection.shards[shard] = nil
 
 		shardSection.shardsAvail = append(shardSection.shardsAvail, shard)

@@ -191,23 +191,23 @@ func benchmarkCacheGet(recordCount, dataSize uint32, b *testing.B) {
 	}
 }
 
-func benchmarkAdvanced(recordCount, dataSize uint32, b *testing.B) {
-	var data []byte
-	cache := New(OptionMaxRecords(recordCount))
+// func benchmarkAdvanced(recordCount, dataSize uint32, b *testing.B) {
+// 	var data []byte
+// 	cache := New(OptionMaxRecords(recordCount))
 
-	for i := uint32(0); i < dataSize; i++ {
-		data = append(data, 1)
-	}
+// 	for i := uint32(0); i < dataSize; i++ {
+// 		data = append(data, 1)
+// 	}
 
-	cache.Set([]byte{byte(1)}, data, 0)
+// 	cache.Set([]byte{byte(1)}, data, 0)
 
-	b.ReportAllocs()
-	b.ResetTimer()
+// 	b.ReportAllocs()
+// 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
-		cache.Get([]byte{byte(1)})
-	}
-}
+// 	for n := 0; n < b.N; n++ {
+// 		cache.Get([]byte{byte(1)})
+// 	}
+// }
 
 func BenchmarkCacheNewSmall(b *testing.B) {
 	benchmarkCacheNew(512, b)

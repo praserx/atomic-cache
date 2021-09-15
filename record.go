@@ -28,7 +28,6 @@ func NewRecord(size uint32) *Record {
 // record data property and size is set.
 func (r *Record) Set(data []byte) {
 	dataLength := uint32(len(data))
-
 	r.Lock() // Lock for writing and reading
 	if dataLength > r.size {
 		r.alloc = r.size
@@ -42,12 +41,11 @@ func (r *Record) Set(data []byte) {
 // Get returns bytes based on size of virtual allocation. It means that it
 // returns only specific count of bytes, based on alloc property. If array on
 // output is empty, then record is not exists.
-func (r *Record) Get() []byte {
+func (r *Record) Get() (data []byte) {
 	r.RLock() // Lock for reading
-	data := r.data[:r.alloc]
+	data = r.data[:r.alloc]
 	r.RUnlock() // Unlock for reading
-
-	return data
+	return
 }
 
 // Free set alloc property to 0. Through this action, we empty memory of record
@@ -59,17 +57,17 @@ func (r *Record) Free() {
 }
 
 // GetAllocated returns size of allocated bytes.
-func (r *Record) GetAllocated() uint32 {
+func (r *Record) GetAllocated() (size uint32) {
 	r.RLock() // Lock for reading
-	data := r.alloc
+	size = r.alloc
 	r.RUnlock() // Unlock for reading
-	return data
+	return
 }
 
 // GetDataLength returns real size of allocated bytes in memory.
-func (r *Record) GetDataLength() uint32 {
+func (r *Record) GetDataLength() (size uint32) {
 	r.RLock() // Lock for reading
-	data := uint32(len(r.data))
+	size = uint32(len(r.data))
 	r.RUnlock() // Unlock for reading
-	return data
+	return
 }

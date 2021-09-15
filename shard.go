@@ -33,27 +33,23 @@ func NewShard(slotCount, slotSize uint32) *Shard {
 
 // Set store data as a record and decrease slotAvail count. On output it return
 // index of used slot.
-func (s *Shard) Set(data []byte) uint32 {
-	var index uint32
-
+func (s *Shard) Set(data []byte) (i uint32) {
 	s.Lock() // Lock for writing and reading
-	index, s.slotAvail = s.slotAvail[0], s.slotAvail[1:]
+	i, s.slotAvail = s.slotAvail[0], s.slotAvail[1:]
 	s.Unlock() // Unlock for writing and reading
-
 	s.RLock()
-	s.slots[index].Set(data)
+	s.slots[i].Set(data)
 	s.RUnlock()
-
-	return index
+	return
 }
 
 // Get returns bytes from shard memory based on index. If array on output is
 // empty, then record is not exists.
-func (s *Shard) Get(index uint32) []byte {
+func (s *Shard) Get(index uint32) (v []byte) {
 	s.RLock()
-	value := s.slots[index].Get()
+	v = s.slots[index].Get()
 	s.RUnlock()
-	return value
+	return
 }
 
 // Free empty memory specified by index on input and increase slot counter.
@@ -65,23 +61,20 @@ func (s *Shard) Free(index uint32) {
 }
 
 // GetSlotsAvail returns number of available memory slots of shard.
-func (s *Shard) GetSlotsAvail() uint32 {
+func (s *Shard) GetSlotsAvail() (cnt uint32) {
 	s.RLock()
-	slotAvailCnt := uint32(len(s.slotAvail))
+	cnt = uint32(len(s.slotAvail))
 	s.RUnlock()
-	return slotAvailCnt
+	return
 }
 
 // IsEmpty return true if shard has no record registered. Otherwise return
 // false.
-func (s *Shard) IsEmpty() bool {
-	result := false
-
+func (s *Shard) IsEmpty() (result bool) {
 	s.RLock()
 	if len(s.slotAvail) == len(s.slots) {
 		result = true
 	}
 	s.RUnlock()
-
-	return result
+	return
 }
