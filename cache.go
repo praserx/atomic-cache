@@ -5,8 +5,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/emirpasic/gods/trees/btree"
 )
 
 // Internal cache errors
@@ -33,28 +31,28 @@ type AtomicCache struct {
 	// Deadlock mutex for debugging purpose.
 	// deadlock.RWMutex
 
-	// Lookup structure used for global index. It is based on BTree structure.
-	lookup *btree.Tree
+	// Lookup structure used for global index.
+	lookup map[interface{}]LookupRecord
 
 	// Shards lookup tables which contains information about shards sections.
 	smallShards, mediumShards, largeShards ShardsLookup
 
 	// Size of byte array used for memory allocation at small shard section.
-	RecordSizeSmall uint32
+	RecordSizeSmall int
 	// Size of byte array used for memory allocation at medium shard section.
-	RecordSizeMedium uint32
+	RecordSizeMedium int
 	// Size of byte array used for memory allocation at large shard section.
-	RecordSizeLarge uint32
+	RecordSizeLarge int
 
 	// Maximum records per shard.
-	MaxRecords uint32
+	MaxRecords int
 
 	// Maximum small shards which can be allocated in cache memory.
-	MaxShardsSmall uint32
+	MaxShardsSmall int
 	// Maximum medium shards which can be allocated in cache memory.
-	MaxShardsMedium uint32
+	MaxShardsMedium int
 	// Maximum large shards which can be allocated in cache memory.
-	MaxShardsLarge uint32
+	MaxShardsLarge int
 
 	// Garbage collector starter (run garbage collection every X memory sets).
 	GcStarter uint32
@@ -72,25 +70,25 @@ type ShardsLookup struct {
 	// Array of pointers to shard objects.
 	shards []*Shard
 	// Array of shard indexes which are currently active.
-	shardsActive []uint32
+	shardsActive []int
 	// Array of shard indexes which are currently available for new allocation.
-	shardsAvail []uint32
+	shardsAvail []int
 }
 
 // LookupRecord represents item in lookup table. One record contains index of
 // shard and record. So we can determine which shard access and which record of
 // shard to get. Record also contains expiration time.
 type LookupRecord struct {
-	RecordIndex  uint32
-	ShardIndex   uint32
-	ShardSection uint8
+	RecordIndex  int
+	ShardIndex   int
+	ShardSection int
 	Expiration   time.Time
 }
 
 // BufferItem is used for buffer, which contains all unattended cache set
 // request.
 type BufferItem struct {
-	Key    []byte
+	Key    interface{}
 	Data   []byte
 	Expire time.Duration
 }
@@ -105,7 +103,7 @@ func New(opts ...Option) *AtomicCache {
 		MaxShardsSmall:   256,
 		MaxShardsMedium:  128,
 		MaxShardsLarge:   64,
-		GcStarter:        25000,
+		GcStarter:        512000,
 	}
 
 	for _, opt := range opts {
@@ -116,7 +114,7 @@ func New(opts ...Option) *AtomicCache {
 	cache := &AtomicCache{}
 
 	// Init lookup table
-	cache.lookup = btree.NewWithStringComparator(16)
+	cache.lookup = make(map[interface{}]LookupRecord)
 
 	// Init small shards section
 	initShardsSection(&cache.smallShards, options.MaxShardsSmall, options.MaxRecords, options.RecordSizeSmall)
@@ -138,11 +136,11 @@ func New(opts ...Option) *AtomicCache {
 
 // initShardsSection provides shards sections initialization. So the cache has
 // one shard in each section at the begging.
-func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recordSize uint32) {
-	var shardIndex uint32
+func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recordSize int) {
+	var shardIndex int
 
 	shardsSection.shards = make([]*Shard, maxShards)
-	for i := uint32(0); i < maxShards; i++ {
+	for i := 0; i < maxShards; i++ {
 		shardsSection.shardsAvail = append(shardsSection.shardsAvail, i)
 	}
 
@@ -155,7 +153,7 @@ func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recor
 // are replaced. If not, it checks if there are some allocated shard with empty
 // space for data. If there is no empty space, new shard is allocated. Otherwise
 // some valid record (FIFO queue) is deleted and new one is stored.
-func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
+func (a *AtomicCache) Set(key interface{}, data []byte, expire time.Duration) error {
 	if len(data) > int(a.RecordSizeLarge) {
 		return ErrDataLimit
 	}
@@ -165,15 +163,13 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 	shardSection, shardSectionID := a.getShardsSectionBySize(len(data))
 
 	a.Lock()
-	if ival, ok := a.lookup.Get(string(key)); !ok {
+	if val, ok := a.lookup[key]; !ok {
 		new = true
 	} else {
-		val := ival.(LookupRecord)
-
 		if val.ShardSection != shardSectionID {
 			shardSection.shards[val.ShardIndex].Free(val.RecordIndex)
 			val.RecordIndex = shardSection.shards[val.ShardIndex].Set(data)
-			a.lookup.Put(string(key), LookupRecord{ShardIndex: val.ShardIndex, ShardSection: shardSectionID, RecordIndex: val.RecordIndex, Expiration: a.getExprTime(expire)})
+			a.lookup[key] = LookupRecord{ShardIndex: val.ShardIndex, ShardSection: shardSectionID, RecordIndex: val.RecordIndex, Expiration: a.getExprTime(expire)}
 		} else {
 			prevShardSection := a.getShardsSectionByID(val.ShardSection)
 			prevShardSection.shards[val.ShardIndex].Free(val.RecordIndex)
@@ -184,11 +180,11 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 	if new {
 		if si, ok := a.getShard(shardSectionID); ok {
 			ri := shardSection.shards[si].Set(data)
-			a.lookup.Put(string(key), LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)})
+			a.lookup[key] = LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)}
 		} else if si, ok := a.getEmptyShard(shardSectionID); ok {
 			shardSection.shards[si] = NewShard(a.MaxRecords, a.getRecordSizeByShardSectionID(shardSectionID))
 			ri := shardSection.shards[si].Set(data)
-			a.lookup.Put(string(key), LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)})
+			a.lookup[key] = LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)}
 		} else {
 			if len(a.buffer) <= int(a.MaxRecords) {
 				a.buffer = append(a.buffer, BufferItem{Key: key, Data: data, Expire: expire})
@@ -212,24 +208,16 @@ func (a *AtomicCache) Set(key []byte, data []byte, expire time.Duration) error {
 
 // Get returns list of bytes if record is present in cache memory. If record is
 // not found, then error is returned and list is nil.
-func (a *AtomicCache) Get(key []byte) ([]byte, error) {
-	var result []byte
-	var hit = false
-
+func (a *AtomicCache) Get(key interface{}) ([]byte, error) {
 	a.RLock()
-	if ival, ok := a.lookup.Get(string(key)); ok {
-		val := ival.(LookupRecord)
-		shardSection := a.getShardsSectionByID(val.ShardSection)
-
-		if shardSection.shards[val.ShardIndex] != nil && time.Now().Before(val.Expiration) {
-			result = shardSection.shards[val.ShardIndex].Get(val.RecordIndex)
-			hit = true
-		}
-	}
+	val, ok := a.lookup[key]
 	a.RUnlock()
 
-	if hit {
-		return result, nil
+	if ok {
+		shardSection := a.getShardsSectionByID(val.ShardSection)
+		if shardSection.shards[val.ShardIndex] != nil && time.Now().Before(val.Expiration) {
+			return shardSection.shards[val.ShardIndex].Get(val.RecordIndex), nil
+		}
 	}
 
 	return nil, ErrNotFound
@@ -239,7 +227,7 @@ func (a *AtomicCache) Get(key []byte) ([]byte, error) {
 // if shard was released. The function requires the shard section ID and
 // shard ID on input.
 // This method is not thread safe and additional locks are required.
-func (a *AtomicCache) releaseShard(shardSectionID uint8, shard uint32) bool {
+func (a *AtomicCache) releaseShard(shardSectionID int, shard int) bool {
 	var shardSection *ShardsLookup
 
 	if shardSection = a.getShardsSectionByID(shardSectionID); shardSection == nil {
@@ -267,7 +255,7 @@ func (a *AtomicCache) releaseShard(shardSectionID uint8, shard uint32) bool {
 // record. If there is no shard with available space, then false is returned as
 // a second value. The function requires the shard section ID on input.
 // This method is not thread safe and additional locks are required.
-func (a *AtomicCache) getShard(shardSectionID uint8) (uint32, bool) {
+func (a *AtomicCache) getShard(shardSectionID int) (int, bool) {
 	var shardSection *ShardsLookup
 
 	if shardSection = a.getShardsSectionByID(shardSectionID); shardSection == nil {
@@ -287,7 +275,7 @@ func (a *AtomicCache) getShard(shardSectionID uint8) (uint32, bool) {
 // allocation. If there is no left index, then false is returned as a second
 // value. The function requires the shard section ID on input.
 // This method is not thread safe and additional locks are required.
-func (a *AtomicCache) getEmptyShard(shardSectionID uint8) (uint32, bool) {
+func (a *AtomicCache) getEmptyShard(shardSectionID int) (int, bool) {
 	var shardSection *ShardsLookup
 
 	if shardSection = a.getShardsSectionByID(shardSectionID); shardSection == nil {
@@ -298,7 +286,7 @@ func (a *AtomicCache) getEmptyShard(shardSectionID uint8) (uint32, bool) {
 		return 0, false
 	}
 
-	var shardIndex uint32
+	var shardIndex int
 	shardIndex, shardSection.shardsAvail = shardSection.shardsAvail[0], shardSection.shardsAvail[1:]
 	shardSection.shardsActive = append(shardSection.shardsActive, shardIndex)
 
@@ -309,13 +297,13 @@ func (a *AtomicCache) getEmptyShard(shardSectionID uint8) (uint32, bool) {
 // identifier as a second value. The function requires the data size value on
 // input. If data are bigger than allowed value, then nil and 0 is returned.
 // This method is not thread safe and additional locks are required.
-func (a *AtomicCache) getShardsSectionBySize(dataSize int) (*ShardsLookup, uint8) {
+func (a *AtomicCache) getShardsSectionBySize(dataSize int) (*ShardsLookup, int) {
 	if dataSize <= int(a.RecordSizeSmall) {
-		return &a.smallShards, uint8(SMSH)
+		return &a.smallShards, SMSH
 	} else if dataSize > int(a.RecordSizeSmall) && dataSize <= int(a.RecordSizeMedium) {
-		return &a.mediumShards, uint8(MDSH)
+		return &a.mediumShards, MDSH
 	} else if dataSize > int(a.RecordSizeMedium) && dataSize <= int(a.RecordSizeLarge) {
-		return &a.largeShards, uint8(LGSH)
+		return &a.largeShards, LGSH
 	}
 
 	return nil, 0
@@ -325,12 +313,12 @@ func (a *AtomicCache) getShardsSectionBySize(dataSize int) (*ShardsLookup, uint8
 // requires the shard section ID on input. If section ID is not valid, nil
 // is returned.
 // This method is not thread safe and additional locks are required.
-func (a *AtomicCache) getShardsSectionByID(sectionID uint8) *ShardsLookup {
-	if sectionID == uint8(SMSH) {
+func (a *AtomicCache) getShardsSectionByID(sectionID int) *ShardsLookup {
+	if sectionID == SMSH {
 		return &a.smallShards
-	} else if sectionID == uint8(MDSH) {
+	} else if sectionID == MDSH {
 		return &a.mediumShards
-	} else if sectionID == uint8(LGSH) {
+	} else if sectionID == LGSH {
 		return &a.largeShards
 	}
 
@@ -340,7 +328,7 @@ func (a *AtomicCache) getShardsSectionByID(sectionID uint8) *ShardsLookup {
 // getRecordSizeByShardSectionID returns maximum record size for specified
 // shard section ID. It returns 0 if there is not known section ID on input.
 // This method is not thread safe and additional locks are required.
-func (a *AtomicCache) getRecordSizeByShardSectionID(sectionID uint8) uint32 {
+func (a *AtomicCache) getRecordSizeByShardSectionID(sectionID int) int {
 	if sectionID == SMSH {
 		return a.RecordSizeSmall
 	} else if sectionID == MDSH {
@@ -368,16 +356,14 @@ func (a *AtomicCache) getExprTime(expire time.Duration) time.Time {
 // active shard).
 func (a *AtomicCache) collectGarbage() {
 	a.Lock()
-	for _, k := range a.lookup.Keys() {
-		iv, _ := a.lookup.Get(k.(string))                      // get record
-		v := iv.(LookupRecord)                                 // convert record from interface to LookupRecord
+	for k, v := range a.lookup {
 		shardSection := a.getShardsSectionByID(v.ShardSection) // get shard section
 		if time.Now().After(v.Expiration) {
 			shardSection.shards[v.ShardIndex].Free(v.RecordIndex)
 			if len(shardSection.shardsActive) > 1 {
 				a.releaseShard(v.ShardSection, v.ShardIndex)
 			}
-			a.lookup.Remove(k)
+			delete(a.lookup, k)
 		}
 	}
 

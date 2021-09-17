@@ -7,7 +7,7 @@ import (
 // Shard structure contains multiple slots for records.
 type Shard struct {
 	sync.RWMutex
-	slotAvail []uint32
+	slotAvail []int
 	slots     []*Record
 }
 
@@ -15,16 +15,16 @@ type Shard struct {
 // in property records and every record has it's own unique id (id is not
 // propagated to record instance). Argument slotCount represents number of
 // records in shard and slotSize represents size of one record.
-func NewShard(slotCount, slotSize uint32) *Shard {
+func NewShard(slotCount, slotSize int) *Shard {
 	shard := &Shard{}
 
 	// Initialize available slots stack
-	for i := uint32(0); i < slotCount; i++ {
+	for i := 0; i < slotCount; i++ {
 		shard.slotAvail = append(shard.slotAvail, i)
 	}
 
 	// Initialize record list
-	for i := uint32(0); i < slotCount; i++ {
+	for i := 0; i < slotCount; i++ {
 		shard.slots = append(shard.slots, NewRecord(slotSize))
 	}
 
@@ -33,19 +33,17 @@ func NewShard(slotCount, slotSize uint32) *Shard {
 
 // Set store data as a record and decrease slotAvail count. On output it return
 // index of used slot.
-func (s *Shard) Set(data []byte) (i uint32) {
+func (s *Shard) Set(data []byte) (i int) {
 	s.Lock() // Lock for writing and reading
 	i, s.slotAvail = s.slotAvail[0], s.slotAvail[1:]
-	s.Unlock() // Unlock for writing and reading
-	s.RLock()
 	s.slots[i].Set(data)
-	s.RUnlock()
+	s.Unlock() // Unlock for writing and reading
 	return
 }
 
 // Get returns bytes from shard memory based on index. If array on output is
 // empty, then record is not exists.
-func (s *Shard) Get(index uint32) (v []byte) {
+func (s *Shard) Get(index int) (v []byte) {
 	s.RLock()
 	v = s.slots[index].Get()
 	s.RUnlock()
@@ -53,7 +51,7 @@ func (s *Shard) Get(index uint32) (v []byte) {
 }
 
 // Free empty memory specified by index on input and increase slot counter.
-func (s *Shard) Free(index uint32) {
+func (s *Shard) Free(index int) {
 	s.Lock()
 	s.slots[index].Free()
 	s.slotAvail = append(s.slotAvail, index)
@@ -61,9 +59,9 @@ func (s *Shard) Free(index uint32) {
 }
 
 // GetSlotsAvail returns number of available memory slots of shard.
-func (s *Shard) GetSlotsAvail() (cnt uint32) {
+func (s *Shard) GetSlotsAvail() (cnt int) {
 	s.RLock()
-	cnt = uint32(len(s.slotAvail))
+	cnt = len(s.slotAvail)
 	s.RUnlock()
 	return
 }

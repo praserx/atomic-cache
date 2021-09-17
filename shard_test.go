@@ -7,8 +7,8 @@ import (
 
 func TestShardSimple(t *testing.T) {
 	for _, c := range []struct {
-		recordCount uint32
-		recordSize  uint32
+		recordCount int
+		recordSize  int
 		in          []byte
 		want        []byte
 	}{
@@ -26,17 +26,17 @@ func TestShardSimple(t *testing.T) {
 
 func TestShardIntermediate(t *testing.T) {
 	for _, c := range []struct {
-		recordCount uint32
-		recordSize  uint32
+		recordCount int
+		recordSize  int
 		in          []byte
 		want        []byte
 	}{
 		{1024, 1024, []byte("test value"), []byte("test value")},
 	} {
-		var indexes []uint32
+		var indexes []int
 		shard := NewShard(c.recordCount, c.recordSize)
-		
-		for i := uint32(0); i < c.recordCount; i++ {
+
+		for i := 0; i < c.recordCount; i++ {
 			indexes = append(indexes, shard.Set(c.in))
 		}
 
@@ -52,7 +52,7 @@ func TestShardIntermediate(t *testing.T) {
 	}
 }
 
-func benchmarkShardNew(recordCount, recordSize uint32, b *testing.B) {
+func benchmarkShardNew(recordCount, recordSize int, b *testing.B) {
 	b.ReportAllocs()
 
 	for n := 0; n < b.N; n++ {
@@ -72,16 +72,15 @@ func BenchmarkShardNewLarge(b *testing.B) {
 	benchmarkShardNew(16384, 4096, b)
 }
 
-func benchmarkShardSet(recordCount, recordSize, dataSize uint32, b *testing.B) {
-	b.ReportAllocs()
-
+func benchmarkShardSet(recordCount, recordSize, dataSize int, b *testing.B) {
 	var data []byte
 	shard := NewShard(recordCount, recordSize)
 
-	for i := uint32(0); i < dataSize; i++ {
+	for i := 0; i < dataSize; i++ {
 		data = append(data, 1)
 	}
 
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
@@ -102,25 +101,22 @@ func BenchmarkShardSetLarge(b *testing.B) {
 	benchmarkShardSet(16384, 4096, 2048, b)
 }
 
-func benchmarkShardGet(recordCount, recordSize, dataSize uint32, b *testing.B) {
-	b.ReportAllocs()
-
+func benchmarkShardGet(recordCount, recordSize, dataSize int, b *testing.B) {
 	var data []byte
 	shard := NewShard(recordCount, recordSize)
 
-	for i := uint32(0); i < dataSize; i++ {
+	for i := 0; i < dataSize; i++ {
 		data = append(data, 1)
 	}
 
 	index := shard.Set(data)
 
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
 		shard.Get(index)
 	}
-
-	shard.Free(index)
 }
 
 func BenchmarkShardGetSmall(b *testing.B) {

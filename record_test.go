@@ -7,7 +7,7 @@ import (
 
 func TestRecordSimple(t *testing.T) {
 	for _, c := range []struct {
-		size uint32
+		size int
 		in   []byte
 		want []byte
 	}{
@@ -24,7 +24,7 @@ func TestRecordSimple(t *testing.T) {
 }
 
 func TestRecordFree(t *testing.T) {
-	size := uint32(10)
+	size := 10
 	want := []byte{0, 1, 2}
 
 	record := NewRecord(size)
@@ -35,7 +35,7 @@ func TestRecordFree(t *testing.T) {
 	}
 }
 
-func benchmarkRecordNew(size uint32, b *testing.B) {
+func benchmarkRecordNew(size int, b *testing.B) {
 	b.ReportAllocs()
 
 	for n := 0; n < b.N; n++ {
@@ -55,16 +55,15 @@ func BenchmarkRecordNewLarge(b *testing.B) {
 	benchmarkRecordNew(2048, b)
 }
 
-func benchmarkRecordSet(size uint32, b *testing.B) {
-	b.ReportAllocs()
-
+func benchmarkRecordSet(size int, b *testing.B) {
 	var data []byte
 	record := NewRecord(size)
 
-	for i := uint32(0); i < size; i++ {
+	for i := 0; i < size; i++ {
 		data = append(data, 1)
 	}
 
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
@@ -84,17 +83,16 @@ func BenchmarkRecordSetLarge(b *testing.B) {
 	benchmarkRecordSet(2048, b)
 }
 
-func benchmarkRecordGet(size uint32, b *testing.B) {
-	b.ReportAllocs()
-
+func benchmarkRecordGet(size int, b *testing.B) {
 	var data []byte
 	record := NewRecord(size)
 	record.Set(data)
 
-	for i := uint32(0); i < size; i++ {
+	for i := 0; i < size; i++ {
 		data = append(data, 1)
 	}
 
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
