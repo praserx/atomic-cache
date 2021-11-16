@@ -24,7 +24,7 @@ if _, err := cache.Get([]byte("key")); err != nil {
 
 ## Benchmark
 
-For this benchmark was created memory with following specs: `2048 bytes per record`, `2048 records per shard`, `128 shards (max)`. The 2048 bytes was set.
+For this benchmark was created memory with following specs: `2048 bytes per record`, `2048 records per shard`, `128 shards (max)`. The 1024 bytes was set.
 
 ```
 BenchmarkCacheNewMedium-12       	     314	   3804726 ns/op	22686418 B/op	   12402 allocs/op
