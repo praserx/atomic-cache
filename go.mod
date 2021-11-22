@@ -1,4 +1,4 @@
-module github.com/PraserX/atomic-cache
+module github.com/praserx/atomic-cache
 
 go 1.17
 
