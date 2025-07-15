@@ -32,7 +32,7 @@ type AtomicCache struct {
 	// deadlock.RWMutex
 
 	// Lookup structure used for global index.
-	lookup map[interface{}]LookupRecord
+	lookup map[string]LookupRecord
 
 	// Shards lookup tables which contains information about shards sections.
 	smallShards, mediumShards, largeShards ShardsLookup
@@ -88,7 +88,7 @@ type LookupRecord struct {
 // BufferItem is used for buffer, which contains all unattended cache set
 // request.
 type BufferItem struct {
-	Key    interface{}
+	Key    string
 	Data   []byte
 	Expire time.Duration
 }
@@ -114,7 +114,7 @@ func New(opts ...Option) *AtomicCache {
 	cache := &AtomicCache{}
 
 	// Init lookup table
-	cache.lookup = make(map[interface{}]LookupRecord)
+	cache.lookup = make(map[string]LookupRecord)
 
 	// Init small shards section
 	initShardsSection(&cache.smallShards, options.MaxShardsSmall, options.MaxRecords, options.RecordSizeSmall)
@@ -153,7 +153,7 @@ func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recor
 // are replaced. If not, it checks if there are some allocated shard with empty
 // space for data. If there is no empty space, new shard is allocated. Otherwise
 // some valid record (FIFO queue) is deleted and new one is stored.
-func (a *AtomicCache) Set(key interface{}, data []byte, expire time.Duration) error {
+func (a *AtomicCache) Set(key string, data []byte, expire time.Duration) error {
 	if len(data) > int(a.RecordSizeLarge) {
 		return ErrDataLimit
 	}
@@ -208,7 +208,7 @@ func (a *AtomicCache) Set(key interface{}, data []byte, expire time.Duration) er
 
 // Get returns list of bytes if record is present in cache memory. If record is
 // not found, then error is returned and list is nil.
-func (a *AtomicCache) Get(key interface{}) ([]byte, error) {
+func (a *AtomicCache) Get(key string) ([]byte, error) {
 	a.RLock()
 	val, ok := a.lookup[key]
 	a.RUnlock()
