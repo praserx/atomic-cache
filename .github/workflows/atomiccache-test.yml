@@ -24,8 +24,6 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
       - name: Vet
         run: go vet ./...
       - name: Test
@@ -33,6 +31,7 @@ jobs:
       - name: Test (race detector)
         if: matrix.os == 'ubuntu-latest'
         run: go test -race ./...
-      - name: Staticcheck test
-        run: staticcheck ./...
+      - uses: dominikh/staticcheck-action@v1.3.01
+        with:
+          version: "2022.1.1"
     
