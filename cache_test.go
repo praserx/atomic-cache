@@ -1,14 +1,15 @@
 package atomiccache
 
 import (
-	big "github.com/allegro/bigcache"
-	fre "github.com/coocood/freecache"
-	has "github.com/hashicorp/golang-lru"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"testing"
 	"time"
+
+	big "github.com/allegro/bigcache"
+	fre "github.com/coocood/freecache"
+	has "github.com/hashicorp/golang-lru"
 )
 
 func TestCacheFuncGetShardsSectionBySize(t *testing.T) {
