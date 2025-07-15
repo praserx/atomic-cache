@@ -9,7 +9,7 @@ The library is production-ready, leverages only the Go standard library and sele
 ## Installation
 
 ```go
-go get github.com/praserx/atomic-cache
+go get github.com/praserx/atomic-cache/v2
 ```
 
 ## Configuration
