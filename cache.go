@@ -11,7 +11,7 @@ import (
 var (
 	ErrNotFound   = errors.New("record not found")
 	ErrDataLimit  = errors.New("cannot create new record: it violates data limit")
-	ErrFullMemory = errors.New("cannot create new rocord: memory is full")
+	ErrFullMemory = errors.New("cannot create new record: memory is full")
 )
 
 // Constans below are used for shard section identification.
@@ -314,11 +314,12 @@ func (a *AtomicCache) getShardsSectionBySize(dataSize int) (*ShardsLookup, int) 
 // is returned.
 // This method is not thread safe and additional locks are required.
 func (a *AtomicCache) getShardsSectionByID(sectionID int) *ShardsLookup {
-	if sectionID == SMSH {
+	switch sectionID {
+	case SMSH:
 		return &a.smallShards
-	} else if sectionID == MDSH {
+	case MDSH:
 		return &a.mediumShards
-	} else if sectionID == LGSH {
+	case LGSH:
 		return &a.largeShards
 	}
 
@@ -329,11 +330,12 @@ func (a *AtomicCache) getShardsSectionByID(sectionID int) *ShardsLookup {
 // shard section ID. It returns 0 if there is not known section ID on input.
 // This method is not thread safe and additional locks are required.
 func (a *AtomicCache) getRecordSizeByShardSectionID(sectionID int) int {
-	if sectionID == SMSH {
+	switch sectionID {
+	case SMSH:
 		return a.RecordSizeSmall
-	} else if sectionID == MDSH {
+	case MDSH:
 		return a.RecordSizeMedium
-	} else if sectionID == LGSH {
+	case LGSH:
 		return a.RecordSizeLarge
 	}
 
@@ -367,9 +369,9 @@ func (a *AtomicCache) collectGarbage() {
 		}
 	}
 
-	var localBuffer []BufferItem
-	copy(localBuffer, a.buffer)
-	a.buffer = []BufferItem{}
+	// Properly copy buffer to avoid concurrency issues
+	localBuffer := append([]BufferItem(nil), a.buffer...)
+	a.buffer = nil
 
 	a.Unlock()
 
