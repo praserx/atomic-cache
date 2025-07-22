@@ -229,7 +229,7 @@ func (a *AtomicCache) Set(key string, data []byte, expire time.Duration) error {
 			a.Unlock()
 		} else if si, ok := a.getEmptyShard(shardSectionID); ok {
 			// No shard with space, allocate new shard.
-			// Explaination: If there is no shard with available space, we allocate a new shard
+			// Explanation: If there is no shard with available space, we allocate a new shard
 			// and set the data in that new shard. This is necessary when all existing shards
 			// are full and we need to create a new shard to accommodate the new record.
 			// This ensures that we can always store new records, even if it means creating a
