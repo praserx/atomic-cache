@@ -221,7 +221,7 @@ func (a *AtomicCache) Set(key string, data []byte, expire time.Duration) error {
 		a.Lock()
 		if si, ok := a.getShard(shardSectionID); ok {
 			// Found shard with available slot.
-			// Explaination: If we found a shard with available space, we can simply set the data
+			// Explanation: If we found a shard with available space, we can simply set the data
 			// in that shard and update the lookup table with the new record index.
 			// This avoids unnecessary memory allocation and deallocation, improving performance.
 			ri := shardSection.shards[si].Set(data)
