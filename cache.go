@@ -14,7 +14,7 @@ var (
 	ErrFullMemory = errors.New("cannot create new record: memory is full")
 )
 
-// Constans below are used for shard section identification.
+// Constants below are used for shard section identification.
 const (
 	// SMSH - Small Shards section
 	SMSH = iota + 1
@@ -38,7 +38,7 @@ type AtomicCache struct {
 	// Lookup structure used for global index.
 	lookup map[string]LookupRecord
 
-	// Shards lookup tables which contains information about shards sections.
+	// Shards lookup tables which contain information about shard sections.
 	smallShards, mediumShards, largeShards ShardsLookup
 
 	// Size of byte array used for memory allocation at small shard section.
@@ -63,8 +63,8 @@ type AtomicCache struct {
 	// Garbage collector counter for starter.
 	GcCounter uint32
 
-	// Buffer contains all unattended cache set requests. It has a maximum site
-	// which is equal to MaxRecords value.
+	// Buffer contains all unattended cache set requests. It has a maximum size
+	// which is equal to the MaxRecords value.
 	buffer []BufferItem
 }
 
@@ -79,9 +79,9 @@ type ShardsLookup struct {
 	shardsAvail []int
 }
 
-// LookupRecord represents item in lookup table. One record contains index of
-// shard and record. So we can determine which shard access and which record of
-// shard to get. Record also contains expiration time.
+// LookupRecord represents an item in the lookup table. One record contains the index of
+// the shard and record. So we can determine which shard to access and which record of
+// the shard to get. Record also contains expiration time.
 type LookupRecord struct {
 	RecordIndex  int
 	ShardIndex   int
@@ -89,15 +89,15 @@ type LookupRecord struct {
 	Expiration   time.Time
 }
 
-// BufferItem is used for buffer, which contains all unattended cache set
-// request.
+// BufferItem is used for the buffer, which contains all unattended cache set
+// requests.
 type BufferItem struct {
 	Key    string
 	Data   []byte
 	Expire time.Duration
 }
 
-// New initialize whole cache memory with one allocated shard.
+// New initializes the whole cache memory with one allocated shard.
 func New(opts ...Option) *AtomicCache {
 	var options = &Options{
 		RecordSizeSmall:  512,
@@ -138,8 +138,8 @@ func New(opts ...Option) *AtomicCache {
 	return cache
 }
 
-// initShardsSection provides shards sections initialization. So the cache has
-// one shard in each section at the begging.
+// initShardsSection provides shard section initialization. So the cache has
+// one shard in each section at the beginning.
 func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recordSize int) {
 	var shardIndex int
 
@@ -153,10 +153,9 @@ func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recor
 	shardsSection.shards[shardIndex] = NewShard(maxRecords, recordSize)
 }
 
-// Set store data to cache memory. If key/record is already in memory, then data
-// are replaced. If not, it checks if there are some allocated shard with empty
-// space for data. If there is no empty space, new shard is allocated. Otherwise
-// some valid record (FIFO queue) is deleted and new one is stored.
+// Set stores data to cache memory. If the key/record is already in memory, then data
+// are replaced. If not, it checks if there is an allocated shard with empty
+// space for data. If there is no empty space, a new shard is allocated.
 // Remarks:
 // - If expiration time is set to 0 then maximum expiration time is used (48 hours).
 // - If expiration time is KeepTTL, then current expiration time is preserved.
@@ -395,9 +394,9 @@ func (a *AtomicCache) getEmptyShard(shardSectionID int) (int, bool) {
 	return shardIndex, true
 }
 
-// getShardsSectionBySize returns shards section lookup structure and section
-// identifier as a second value. The function requires the data size value on
-// input. If data are bigger than allowed value, then nil and 0 is returned.
+// getShardsSectionBySize returns the shard section lookup structure and section
+// identifier as a second value. The function requires the data size value as input.
+// If data are bigger than the allowed value, then nil and 0 are returned.
 // This method is not thread safe and additional locks are required.
 func (a *AtomicCache) getShardsSectionBySize(dataSize int) (*ShardsLookup, int) {
 	if dataSize <= int(a.RecordSizeSmall) {
@@ -454,10 +453,9 @@ func (a *AtomicCache) getExprTime(expire time.Duration) time.Time {
 	return time.Now().Add(expire)
 }
 
-// collectGarbage provides garbage collect. It goes throught lookup table and
-// checks expiration time. If shard end up empty, then garbage collect release
-// him, but only if there is more than one shard in charge (we always have one
-// active shard).
+// collectGarbage provides garbage collection. It goes through the lookup table and
+// checks expiration time. If a shard ends up empty, then garbage collection releases
+// it, but only if there is more than one shard in use (there is always at least one active shard).
 func (a *AtomicCache) collectGarbage() {
 	a.Lock()
 	for k, v := range a.lookup {
