@@ -242,7 +242,7 @@ func (a *AtomicCache) Set(key string, data []byte, expire time.Duration) error {
 			// All shards full, buffer the request or return error if buffer is full.
 			if len(a.buffer) < int(a.MaxRecords) {
 				// Buffer the request if there is space in buffer.
-				// Explaination: If the buffer has space, we can store the request in the buffer
+				// Explanation: If the buffer has space, we can store the request in the buffer
 				// instead of allocating a new shard. This allows us to handle more requests without
 				// immediately allocating new memory, which can be more efficient.
 				// This is useful when the cache is under heavy load and we want to avoid
