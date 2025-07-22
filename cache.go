@@ -195,7 +195,7 @@ func (a *AtomicCache) Set(key string, data []byte, expire time.Duration) error {
 	} else {
 		if val.ShardSection != shardSectionID {
 			// Key exists but data size changed: move to new section, free old record.
-			// Explaination: If the record size changed and data should be stored in a different
+			// Explanation: If the record size changed and data should be stored in a different
 			// shard section, we need to free the old record and allocate a new record in
 			// the correct shard section.
 			a.Lock()
