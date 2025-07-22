@@ -314,6 +314,9 @@ func (a *AtomicCache) Delete(key string) error {
 	}
 
 	shardSection := a.getShardsSectionByID(val.ShardSection)
+	// Check if the shard at val.ShardIndex is nil. This is a defensive check to
+	// handle cases where the shard might have been released or not initialized
+	// due to concurrent modifications or unexpected states.
 	if shardSection.shards[val.ShardIndex] != nil {
 		shardSection.shards[val.ShardIndex].Free(val.RecordIndex)
 		a.releaseShard(val.ShardSection, val.ShardIndex)
