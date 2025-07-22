@@ -140,6 +140,44 @@ func TestCacheFreeAfterExpiration(t *testing.T) {
 	}
 }
 
+func TestCacheKeepTTL(t *testing.T) {
+	cache := New()
+	key := "keep-ttl-key"
+	data1 := []byte("first")
+	data2 := []byte("second")
+	expire := 2 * time.Second
+
+	// Set initial value with expiration
+	if err := cache.Set(key, data1, expire); err != nil {
+		t.Fatalf("Set error: %s", err)
+	}
+	val, ok := cache.lookup[key]
+	if !ok {
+		t.Fatalf("Key not found after Set")
+	}
+	origExp := val.Expiration
+
+	// Update value with KeepTTL
+	if err := cache.Set(key, data2, KeepTTL); err != nil {
+		t.Fatalf("Set error (KeepTTL): %s", err)
+	}
+	val2, ok := cache.lookup[key]
+	if !ok {
+		t.Fatalf("Key not found after Set with KeepTTL")
+	}
+	if !val2.Expiration.Equal(origExp) {
+		t.Errorf("Expiration changed: got %v, want %v", val2.Expiration, origExp)
+	}
+	// Value should be updated
+	got, err := cache.Get(key)
+	if err != nil {
+		t.Fatalf("Get error: %s", err)
+	}
+	if !reflect.DeepEqual(got, data2) {
+		t.Errorf("Value not updated: got %v, want %v", got, data2)
+	}
+}
+
 func benchmarkCacheNew(recordCount int, b *testing.B) {
 	b.ReportAllocs()
 
