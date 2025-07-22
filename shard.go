@@ -41,6 +41,15 @@ func (s *Shard) Set(data []byte) (i int) {
 	return
 }
 
+// Seti updates data in shard memory based on index. To preserve performance,
+// it does not check if index is valid. It is responsibility of caller to ensure
+// that index is valid and within bounds of shard.
+func (s *Shard) Seti(i int, data []byte) {
+	s.Lock() // Lock for writing and reading
+	s.slots[i].Set(data)
+	s.Unlock() // Unlock for writing and reading
+}
+
 // Get returns bytes from shard memory based on index. If array on output is
 // empty, then record is not exists.
 func (s *Shard) Get(index int) (v []byte) {

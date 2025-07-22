@@ -5,6 +5,53 @@ import (
 	"testing"
 )
 
+func TestShardSeti(t *testing.T) {
+	shard := NewShard(10, 4)
+	// Use Set to get a valid index, then SetI to update
+	idx := shard.Set([]byte{0, 0, 0, 0})
+	shard.Seti(idx, []byte{1, 2, 3, 4})
+	got := shard.Get(idx)
+	want := []byte{1, 2, 3, 4}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("SetI: got %v, want %v", got, want)
+	}
+
+	// SetI with out-of-bounds index (should panic, so recover)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("SetI should panic for out-of-bounds index")
+		}
+	}()
+	shard.Seti(20, []byte{9, 9, 9, 9})
+}
+
+func TestShardFreeAndIsEmpty(t *testing.T) {
+	shard := NewShard(5, 4)
+	idx := shard.Set([]byte{1, 2, 3, 4})
+	if shard.IsEmpty() {
+		t.Errorf("Shard should not be empty after Set")
+	}
+	shard.Free(idx)
+	if !shard.IsEmpty() {
+		t.Errorf("Shard should be empty after Free")
+	}
+}
+
+func TestShardGetSlotsAvail(t *testing.T) {
+	shard := NewShard(3, 2)
+	if avail := shard.GetSlotsAvail(); avail != 3 {
+		t.Errorf("Expected 3 slots available, got %d", avail)
+	}
+	idx := shard.Set([]byte{1, 2})
+	if avail := shard.GetSlotsAvail(); avail != 2 {
+		t.Errorf("Expected 2 slots available after Set, got %d", avail)
+	}
+	shard.Free(idx)
+	if avail := shard.GetSlotsAvail(); avail != 3 {
+		t.Errorf("Expected 3 slots available after Free, got %d", avail)
+	}
+}
+
 func TestShardSimple(t *testing.T) {
 	for _, c := range []struct {
 		recordCount int

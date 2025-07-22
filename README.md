@@ -85,9 +85,13 @@ go test -bench=. -benchmem
 For this benchmark, memory was created with the following specs: `1024 bytes per record`, `4096 records per shard`, `256 shards (max)`.
 
 ```
-BenchmarkCacheNewMedium-12       	     291	   3670372 ns/op	22776481 B/op	   12408 allocs/op
-BenchmarkCacheSetMedium-12       	 1928548	       620.3 ns/op	      63 B/op	       1 allocs/op
-BenchmarkCacheGetMedium-12       	16707145	        69.87 ns/op	       0 B/op	       0 allocs/op
+goos: linux
+goarch: amd64
+pkg: github.com/praserx/atomic-cache/v2
+cpu: Intel(R) Core(TM) i7-10850H CPU @ 2.70GHz
+BenchmarkCacheNewMedium-12       	     288	   4109240 ns/op	22750002 B/op	   12405 allocs/op
+BenchmarkCacheSetMedium-12       	 4499152	       269.8 ns/op	      16 B/op	       0 allocs/op
+BenchmarkCacheGetMedium-12       	19747963	        59.72 ns/op	       0 B/op	       0 allocs/op
 ```
 
 *If you want do some special bencharking, go ahead.*
@@ -96,18 +100,26 @@ BenchmarkCacheGetMedium-12       	16707145	        69.87 ns/op	       0 B/op	   
 
 **SET**
 ```
-BenchmarkAtomicCacheSet-12       	 2921170	       413.0 ns/op	      55 B/op	       2 allocs/op
-BenchmarkBigCacheSet-12          	 3448020	       345.5 ns/op	       0 B/op	       0 allocs/op
-BenchmarkFreeCacheSet-12         	 4777364	       217.2 ns/op	      65 B/op	       1 allocs/op
-BenchmarkHashicorpCacheSet-12    	 6208528	       202.2 ns/op	      65 B/op	       3 allocs/op
+goos: linux
+goarch: amd64
+pkg: github.com/praserx/atomic-cache/v2
+cpu: Intel(R) Core(TM) i7-10850H CPU @ 2.70GHz
+BenchmarkAtomicCacheSet-12       	 5755452	       195.3 ns/op	      27 B/op	       1 allocs/op
+BenchmarkBigCacheSet-12          	 4290684	       286.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFreeCacheSet-12         	 5806412	       199.3 ns/op	      65 B/op	       1 allocs/op
+BenchmarkHashicorpCacheSet-12    	 6333306	       170.0 ns/op	      65 B/op	       3 allocs/op
 ```
 
 **GET**
 ```
-BenchmarkAtomicCacheGet-12       	 9697010	       121.7 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBigCacheGet-12          	 4031352	       295.3 ns/op	      88 B/op	       2 allocs/op
-BenchmarkFreeCacheGet-12         	 4813386	       276.8 ns/op	      88 B/op	       2 allocs/op
-BenchmarkHashicorpCacheGet-12    	11071472	       107.4 ns/op	      16 B/op	       1 allocs/op
+goos: linux
+goarch: amd64
+pkg: github.com/praserx/atomic-cache/v2
+cpu: Intel(R) Core(TM) i7-10850H CPU @ 2.70GHz
+BenchmarkAtomicCacheGet-12       	13004460	        97.27 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBigCacheGet-12          	 4403041	       272.5 ns/op	      88 B/op	       2 allocs/op
+BenchmarkFreeCacheGet-12         	 5586747	       231.9 ns/op	      88 B/op	       2 allocs/op
+BenchmarkHashicorpCacheGet-12    	11445339	        99.70 ns/op	      16 B/op	       1 allocs/op
 ```
 
 ## License

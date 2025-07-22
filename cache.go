@@ -24,6 +24,10 @@ const (
 	LGSH
 )
 
+// KeepTTL is used for setting expiration time to current expiration time.
+// It means that record will be updated with the same expiration time.
+const KeepTTL = time.Duration(-1)
+
 // AtomicCache structure represents whole cache memory.
 type AtomicCache struct {
 	// RWMutex is used for access to shards array.
@@ -154,50 +158,106 @@ func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recor
 // space for data. If there is no empty space, new shard is allocated. Otherwise
 // some valid record (FIFO queue) is deleted and new one is stored.
 func (a *AtomicCache) Set(key string, data []byte, expire time.Duration) error {
+	// Reject if data is too large for any shard
 	if len(data) > int(a.RecordSizeLarge) {
 		return ErrDataLimit
 	}
 
+	// Track if this is a new record and if garbage collection should be triggered
 	new := false
 	collectGarbage := false
+
+	// Select the appropriate shard section based on data size
 	shardSection, shardSectionID := a.getShardsSectionBySize(len(data))
 
-	a.Lock()
-	if val, ok := a.lookup[key]; !ok {
+	var (
+		exists bool
+		val    LookupRecord
+	)
+
+	// Only lock for shared state mutation: check if key exists in lookup
+	a.RLock()
+	val, exists = a.lookup[key]
+	a.RUnlock()
+
+	// Determine expiration time: if KeepTTL and record exists, preserve old
+	// expiration; otherwise, calculate new.
+	var expireTime time.Time
+	if expire == KeepTTL && exists {
+		expireTime = val.Expiration
+	} else {
+		expireTime = a.getExprTime(expire)
+	}
+
+	if !exists {
+		// Key is new, will allocate new record
 		new = true
 	} else {
 		if val.ShardSection != shardSectionID {
+			// Key exists but data size changed: move to new section, free old record.
+			// Explanation: If the record size changed and data should be stored in a different
+			// shard section, we need to free the old record and allocate a new record in
+			// the correct shard section.
+			a.Lock()
 			shardSection.shards[val.ShardIndex].Free(val.RecordIndex)
 			val.RecordIndex = shardSection.shards[val.ShardIndex].Set(data)
-			a.lookup[key] = LookupRecord{ShardIndex: val.ShardIndex, ShardSection: shardSectionID, RecordIndex: val.RecordIndex, Expiration: a.getExprTime(expire)}
+			a.lookup[key] = LookupRecord{ShardIndex: val.ShardIndex, ShardSection: shardSectionID, RecordIndex: val.RecordIndex, Expiration: expireTime}
+			a.Unlock()
 		} else {
-			prevShardSection := a.getShardsSectionByID(val.ShardSection)
-			prevShardSection.shards[val.ShardIndex].Free(val.RecordIndex)
-			new = true
+			// Key exists in same section: update existing record.
+			// Explanation: If the record size is the same, we can simply update the existing record
+			// in the same shard section without needing to free it first.
+			// This is more efficient as it avoids unnecessary memory allocation and deallocation.
+			// This is a performance optimization to avoid unnecessary memory allocation and deallocation.
+			// It assumes that the record size has not changed and we can safely update it.
+			a.Lock()
+			shardSection.shards[val.ShardIndex].Seti(val.RecordIndex, data)
+			a.Unlock()
 		}
 	}
 
 	if new {
+		// Allocate new record: try to find a shard with space, or allocate a new shard, or buffer if full
+		a.Lock()
 		if si, ok := a.getShard(shardSectionID); ok {
+			// Found shard with available slot.
+			// Explanation: If we found a shard with available space, we can simply set the data
+			// in that shard and update the lookup table with the new record index.
+			// This avoids unnecessary memory allocation and deallocation, improving performance.
 			ri := shardSection.shards[si].Set(data)
-			a.lookup[key] = LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)}
+			a.lookup[key] = LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: expireTime}
+			a.Unlock()
 		} else if si, ok := a.getEmptyShard(shardSectionID); ok {
+			// No shard with space, allocate new shard.
+			// Explanation: If there is no shard with available space, we allocate a new shard
+			// and set the data in that new shard. This is necessary when all existing shards
+			// are full and we need to create a new shard to accommodate the new record.
+			// This ensures that we can always store new records, even if it means creating a
+			// new shard when all existing shards are full.
 			shardSection.shards[si] = NewShard(a.MaxRecords, a.getRecordSizeByShardSectionID(shardSectionID))
 			ri := shardSection.shards[si].Set(data)
-			a.lookup[key] = LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: a.getExprTime(expire)}
+			a.lookup[key] = LookupRecord{ShardIndex: si, ShardSection: shardSectionID, RecordIndex: ri, Expiration: expireTime}
+			a.Unlock()
 		} else {
-			if len(a.buffer) <= int(a.MaxRecords) {
+			// All shards full, buffer the request or return error if buffer is full.
+			if len(a.buffer) < int(a.MaxRecords) {
+				// Buffer the request if there is space in buffer.
+				// Explanation: If the buffer has space, we can store the request in the buffer
+				// instead of allocating a new shard. This allows us to handle more requests without
+				// immediately allocating new memory, which can be more efficient.
+				// This is useful when the cache is under heavy load and we want to avoid
+				// allocating new shards for every request.
 				a.buffer = append(a.buffer, BufferItem{Key: key, Data: data, Expire: expire})
+				a.Unlock()
 			} else {
 				a.Unlock()
 				return ErrFullMemory
 			}
-
 			collectGarbage = true
 		}
 	}
-	a.Unlock()
 
+	// Trigger garbage collection if needed
 	if (atomic.AddUint32(&a.GcCounter, 1) == a.GcStarter) || collectGarbage {
 		atomic.StoreUint32(&a.GcCounter, 0)
 		go a.collectGarbage()
