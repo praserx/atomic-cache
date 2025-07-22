@@ -157,6 +157,9 @@ func initShardsSection(shardsSection *ShardsLookup, maxShards, maxRecords, recor
 // are replaced. If not, it checks if there are some allocated shard with empty
 // space for data. If there is no empty space, new shard is allocated. Otherwise
 // some valid record (FIFO queue) is deleted and new one is stored.
+// Remarks:
+// - If expiration time is set to 0 then maximum expiration time is used (48 hours).
+// - If expiration time is KeepTTL, then current expiration time is preserved.
 func (a *AtomicCache) Set(key string, data []byte, expire time.Duration) error {
 	// Reject if data is too large for any shard
 	if len(data) > int(a.RecordSizeLarge) {
@@ -281,6 +284,45 @@ func (a *AtomicCache) Get(key string) ([]byte, error) {
 	}
 
 	return nil, ErrNotFound
+}
+
+// Exists checks if record is present in cache memory. It returns true if record
+// is present, otherwise false.
+func (a *AtomicCache) Exists(key string) bool {
+	a.RLock()
+	val, ok := a.lookup[key]
+	a.RUnlock()
+	if !ok {
+		return false
+	}
+	// Check expiration
+	if time.Now().After(val.Expiration) {
+		return false
+	}
+	return true
+}
+
+// Delete removes record from cache memory. If record is not found, then error
+// is returned. It also releases memory used by record in shard.
+// If shard ends up empty, it is released.
+func (a *AtomicCache) Delete(key string) error {
+	a.Lock()
+	defer a.Unlock()
+
+	val, ok := a.lookup[key]
+	if !ok {
+		return ErrNotFound
+	}
+
+	shardSection := a.getShardsSectionByID(val.ShardSection)
+	if shardSection.shards[val.ShardIndex] != nil {
+		shardSection.shards[val.ShardIndex].Free(val.RecordIndex)
+		a.releaseShard(val.ShardSection, val.ShardIndex)
+		delete(a.lookup, key)
+		return nil
+	}
+
+	return ErrNotFound
 }
 
 // releaseShard release shard if there is no record in memory. It returns true

@@ -178,6 +178,66 @@ func TestCacheKeepTTL(t *testing.T) {
 	}
 }
 
+func TestCacheExists(t *testing.T) {
+	cache := New()
+	key := "exists-key"
+	data := []byte("exists-data")
+
+	// Should not exist before set
+	if cache.Exists(key) {
+		t.Errorf("Exists returned true for unset key")
+	}
+
+	// Set and check exists
+	if err := cache.Set(key, data, 10*time.Second); err != nil {
+		t.Fatalf("Set error: %s", err)
+	}
+	if !cache.Exists(key) {
+		t.Errorf("Exists returned false for set key")
+	}
+
+	// Delete and check exists
+	if err := cache.Delete(key); err != nil {
+		t.Fatalf("Delete error: %s", err)
+	}
+	if cache.Exists(key) {
+		t.Errorf("Exists returned true after Delete")
+	}
+
+	// Never-set key
+	if cache.Exists("never-existed") {
+		t.Errorf("Exists returned true for never-set key")
+	}
+}
+
+func TestCacheDelete(t *testing.T) {
+	cache := New()
+	key := "del-key"
+	data := []byte("to-delete")
+
+	// Set and then delete
+	if err := cache.Set(key, data, 0); err != nil {
+		t.Fatalf("Set error: %s", err)
+	}
+	if err := cache.Delete(key); err != nil {
+		t.Errorf("Delete error: %s", err)
+	}
+	// Should not be able to get deleted key
+	if _, err := cache.Get(key); err == nil {
+		t.Errorf("Expected error on Get after Delete, got nil")
+	}
+
+	// Deleting again should return ErrNotFound
+	if err := cache.Delete(key); err != ErrNotFound {
+		t.Errorf("Expected ErrNotFound on double Delete, got %v", err)
+	}
+
+	// Deleting a never-set key should return ErrNotFound
+	if err := cache.Delete("never-existed"); err != ErrNotFound {
+		t.Errorf("Expected ErrNotFound for never-set key, got %v", err)
+	}
+}
+
 func benchmarkCacheNew(recordCount int, b *testing.B) {
 	b.ReportAllocs()
 
