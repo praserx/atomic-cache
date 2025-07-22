@@ -205,7 +205,7 @@ func (a *AtomicCache) Set(key string, data []byte, expire time.Duration) error {
 			a.Unlock()
 		} else {
 			// Key exists in same section: update existing record.
-			// Explaination: If the record size is the same, we can simply update the existing record
+			// Explanation: If the record size is the same, we can simply update the existing record
 			// in the same shard section without needing to free it first.
 			// This is more efficient as it avoids unnecessary memory allocation and deallocation.
 			// This is a performance optimization to avoid unnecessary memory allocation and deallocation.
